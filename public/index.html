@@ -1,0 +1,3119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sistema de Gestão Odontológica</title>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+  :root{
+    --bg-0:#0f1115;
+    --bg-1:#161922;
+    --bg-2:#1e222e;
+    --border:#2a2f3d;
+    --text-0:#e8eaf0;
+    --text-1:#9aa1b4;
+    --accent:#2fd699;
+    --accent-dim:#1f8f68;
+    --danger:#e2555a;
+    --warning:#e2b23a;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Segoe UI', system-ui, -apple-system, sans-serif;
+    background:var(--bg-0);
+    color:var(--text-0);
+  }
+  a{color:inherit; text-decoration:none;}
+
+  /* ===== LOGIN (visual apenas, sem autenticação real) ===== */
+  #tela-login{ height:100vh; display:flex; align-items:center; justify-content:center; }
+  .card-login{
+    background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius);
+    padding:32px; width:340px;
+  }
+  .card-login h1{font-size:18px; margin:0 0 4px;}
+  .card-login p{color:var(--text-1); font-size:13px; margin:0 0 20px;}
+
+  input, select, textarea{
+    width:100%; padding:10px 12px; background:var(--bg-2); border:1px solid var(--border);
+    border-radius:8px; color:var(--text-0); font-size:14px; margin-bottom:12px;
+  }
+  input:focus, select:focus, textarea:focus{outline:1px solid var(--accent);}
+
+  button{
+    cursor:pointer; border:none; border-radius:8px; padding:10px 16px;
+    font-size:14px; font-weight:600;
+  }
+  .btn-primario{background:var(--accent); color:#06231a;}
+  .btn-primario:hover{background:var(--accent-dim); color:#fff;}
+  .btn-secundario{background:var(--bg-2); color:var(--text-0); border:1px solid var(--border);}
+  .btn-perigo{background:var(--danger); color:#fff;}
+  .btn-bloco{width:100%;}
+
+  /* ===== APP SHELL ===== */
+  #app{display:none; height:100vh;}
+  .layout{display:flex; height:100%;}
+
+  #sidebar{
+    width:230px; background:var(--bg-1); border-right:1px solid var(--border);
+    display:flex; flex-direction:column; flex-shrink:0;
+  }
+  #sidebar .logo{padding:20px 18px; font-weight:700; font-size:16px; border-bottom:1px solid var(--border);}
+  #sidebar .logo span{color:var(--accent);}
+  #sidebar nav{flex:1; padding:12px 8px; overflow-y:auto;}
+  .nav-item{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px;
+    color:var(--text-1); font-size:14px; cursor:pointer; margin-bottom:2px;
+  }
+  .nav-item:hover{background:var(--bg-2); color:var(--text-0);}
+  .nav-item.ativo{background:var(--bg-2); color:var(--accent);}
+  #sidebar .rodape-usuario{
+    padding:14px 18px; border-top:1px solid var(--border); font-size:12px; color:var(--text-1);
+  }
+  #sidebar .rodape-usuario b{color:var(--text-0); display:block; font-size:13px;}
+
+  #conteudo{flex:1; overflow-y:auto; padding:28px 32px;}
+  .cabecalho-secao{display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;}
+  .cabecalho-secao h2{margin:0; font-size:20px;}
+  .cabecalho-secao p{color:var(--text-1); font-size:13px; margin:4px 0 0;}
+
+  .secao{display:none;}
+  .secao.ativa{display:block;}
+
+  .painel{
+    background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius);
+    padding:20px; margin-bottom:16px;
+  }
+
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th{text-align:left; color:var(--text-1); font-weight:600; padding:10px 12px; border-bottom:1px solid var(--border);}
+  td{padding:10px 12px; border-bottom:1px solid var(--border);}
+  tr:hover td{background:var(--bg-2);}
+
+  .badge{padding:3px 10px; border-radius:100px; font-size:11px; font-weight:600; display:inline-block;}
+  .badge-verde{background:rgba(47,214,153,.15); color:var(--accent);}
+  .badge-amarelo{background:rgba(226,178,58,.15); color:var(--warning);}
+  .badge-vermelho{background:rgba(226,85,90,.15); color:var(--danger);}
+  .badge-cinza{background:var(--bg-2); color:var(--text-1);}
+
+  .grid-2{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+  .grid-3{display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px;}
+  label{font-size:12px; color:var(--text-1); display:block; margin-bottom:6px;}
+
+  .modal-fundo{
+    display:none; position:fixed; inset:0; background:rgba(0,0,0,.6);
+    align-items:center; justify-content:center; z-index:100;
+  }
+  .modal-fundo.ativo{display:flex;}
+  .modal{
+    background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius);
+    width:560px; max-height:85vh; overflow-y:auto; padding:24px;
+  }
+  .modal h3{margin-top:0;}
+  .modal-acoes{display:flex; justify-content:flex-end; gap:8px; margin-top:18px;}
+
+  canvas.assinatura{
+    background:#fff; border-radius:8px; width:100%; height:150px; cursor:crosshair;
+  }
+
+  .toast{
+    position:fixed; bottom:20px; right:20px; background:var(--bg-2); border:1px solid var(--border);
+    border-radius:8px; padding:12px 18px; font-size:13px; z-index:200; display:none;
+  }
+
+  .aviso-protótipo{
+    background:rgba(226,178,58,.12); border:1px solid var(--warning); color:var(--warning);
+    border-radius:8px; padding:8px 14px; font-size:12px; margin-bottom:16px;
+  }
+
+  /* ===== AGENDA (Multiagenda) ===== */
+  .agenda-layout{ display:flex; gap:16px; align-items:flex-start; }
+
+  .agenda-lateral{
+    width:260px; flex-shrink:0; background:var(--bg-1); border:1px solid var(--border);
+    border-radius:var(--radius); padding:16px;
+  }
+  .mini-calendario-cabecalho{
+    display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; font-size:13px; font-weight:600;
+  }
+  .mini-calendario-cabecalho button{
+    background:transparent; border:none; color:var(--text-1); padding:2px 6px; font-size:14px;
+  }
+  .mini-calendario-cabecalho button:hover{color:var(--accent);}
+  table.mini-calendario{ width:100%; border-collapse:collapse; margin-bottom:16px; }
+  table.mini-calendario th{
+    font-size:10px; color:var(--text-1); text-align:center; padding:4px 0; border:none;
+  }
+  table.mini-calendario td{
+    text-align:center; padding:6px 0; font-size:12px; border:none; cursor:pointer;
+    border-radius:6px; color:var(--text-0);
+  }
+  table.mini-calendario td:hover{background:var(--bg-2);}
+  table.mini-calendario td.dia-selecionado{background:var(--accent); color:#06231a; font-weight:700;}
+  table.mini-calendario td.dia-vazio{cursor:default;}
+
+  .agenda-lateral label.titulo-filtro{
+    font-size:11px; text-transform:uppercase; letter-spacing:.03em; color:var(--text-1); margin:14px 0 8px; display:block;
+  }
+  .agenda-lateral input[type="text"]{ margin-bottom:10px; }
+  .lista-profissionais-filtro{ display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+  .item-profissional-filtro{ display:flex; align-items:center; gap:8px; font-size:13px; }
+  .item-profissional-filtro input{ width:auto; margin:0; }
+  .bolinha-cor{ width:9px; height:9px; border-radius:50%; display:inline-block; flex-shrink:0; }
+
+  .agenda-principal{ flex:1; min-width:0; }
+  .agenda-topo{
+    display:flex; align-items:center; gap:10px; margin-bottom:16px; flex-wrap:wrap;
+  }
+  .agenda-topo .data-atual{ font-size:14px; font-weight:600; }
+  .agenda-topo .data-atual span{ display:block; font-size:11px; color:var(--text-1); font-weight:400; }
+  .agenda-topo button.nav-dia{
+    background:var(--bg-2); border:1px solid var(--border); color:var(--text-0); padding:6px 10px;
+  }
+
+  .colunas-agenda{ display:flex; gap:14px; overflow-x:auto; }
+  .coluna-profissional{
+    background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius);
+    min-width:280px; flex:1;
+  }
+  .coluna-profissional-cabecalho{
+    display:flex; align-items:center; gap:10px; padding:14px 16px; border-bottom:1px solid var(--border);
+  }
+  .avatar-iniciais{
+    width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:700; color:#06231a; flex-shrink:0;
+  }
+  .coluna-profissional-cabecalho b{ font-size:13px; display:block; }
+  .coluna-profissional-cabecalho small{ color:var(--text-1); font-size:11px; }
+
+  .slots-container{ padding:10px; max-height:520px; overflow-y:auto; }
+  .slot-vazio{
+    padding:12px; border-bottom:1px solid var(--border); font-size:12px; color:var(--text-1);
+    display:flex; justify-content:space-between; align-items:center; border-radius:6px;
+  }
+  .slot-vazio:hover{ background:var(--bg-2); color:var(--text-0); }
+  .slot-vazio .horario-clicavel{ cursor:pointer; flex:1; }
+  .slot-vazio .botao-bloquear{
+    cursor:pointer; opacity:.6; padding:2px 6px; border-radius:4px;
+  }
+  .slot-vazio .botao-bloquear:hover{ opacity:1; background:var(--bg-1); }
+  .slot-ocupado{
+    margin:6px 0; padding:10px 12px; border-radius:8px; border-left:3px solid var(--accent);
+    background:var(--bg-2); font-size:12px; cursor:pointer;
+  }
+  .slot-ocupado .horario{ font-size:11px; color:var(--text-1); margin-bottom:2px; }
+  .slot-ocupado .nome-paciente{ font-weight:600; font-size:13px; }
+  .slot-ocupado .tipo-consulta{ font-size:11px; color:var(--text-1); margin-top:2px; }
+  .slot-ocupado .local{ font-size:10px; color:var(--text-1); margin-top:4px; }
+
+  .slot-bloqueado{
+    margin:6px 0; padding:10px 12px; border-radius:8px; border-left:3px solid var(--text-1);
+    background:var(--bg-2); font-size:12px; cursor:pointer; opacity:.85;
+  }
+  .slot-bloqueado .horario{ font-size:11px; color:var(--text-1); margin-bottom:2px; }
+  .slot-bloqueado .motivo-bloqueio{ font-weight:600; font-size:13px; color:var(--text-1); }
+  .slot-bloqueado:hover{ opacity:1; }
+
+  .modal-largo{ width:760px; }
+
+  .abas-prontuario{ display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:16px; }
+  .aba-prontuario{
+    padding:10px 16px; font-size:13px; color:var(--text-1); cursor:pointer; border-bottom:2px solid transparent;
+  }
+  .aba-prontuario:hover{ color:var(--text-0); }
+  .aba-prontuario.ativa{ color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+  .conteudo-aba-prontuario{ display:none; }
+  .conteudo-aba-prontuario.ativa{ display:block; }
+  .divisor-secao-modal{
+    border-left:3px solid var(--accent); padding-left:10px; font-weight:600; font-size:14px; margin:18px 0 12px;
+  }
+  .linha-total-agendamento{ text-align:right; font-size:16px; margin-top:10px; }
+  .checkbox-linha{ display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-1); margin-bottom:10px; }
+  .checkbox-linha input{ width:auto; margin:0; }
+
+  /* ===== ODONTOGRAMA (seletor de dentes no orçamento) ===== */
+  .odontograma-toggle{ display:flex; gap:8px; margin-bottom:10px; }
+  .odontograma-toggle button{ font-size:11px; padding:5px 10px; }
+  .odontograma-toggle button.ativo{ background:var(--accent); color:#06231a; }
+
+  .odontograma-grade{
+    background:var(--bg-2); border:1px solid var(--border); border-radius:8px; padding:14px;
+  }
+  .odontograma-linha{ display:flex; justify-content:center; gap:4px; margin-bottom:6px; flex-wrap:wrap; }
+  .dente-botao{
+    width:30px; height:30px; border-radius:6px; background:var(--bg-1); border:1px solid var(--border);
+    color:var(--text-1); font-size:10px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; flex-shrink:0;
+  }
+  .dente-botao:hover{ border-color:var(--accent); color:var(--text-0); }
+  .dente-botao.selecionado{ background:var(--accent); color:#06231a; border-color:var(--accent); font-weight:700; }
+  .odontograma-divisor{ height:1px; background:var(--border); margin:8px 0; }
+
+  .item-orcamento-linha{
+    display:flex; justify-content:space-between; align-items:flex-start; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px;
+  }
+  .item-orcamento-linha .dentes-tag{ color:var(--text-1); font-size:11px; margin-top:3px; }
+  .item-orcamento-linha button{ background:transparent; color:var(--danger); font-size:12px; padding:2px 6px; }
+
+  .resumo-orcamento-totais{ font-size:13px; margin-top:10px; }
+  .resumo-orcamento-totais div{ display:flex; justify-content:space-between; padding:4px 0; }
+  .resumo-orcamento-totais .total{ font-size:16px; font-weight:700; border-top:1px solid var(--border); padding-top:8px; margin-top:4px; }
+</style>
+</head>
+<body>
+
+<!-- ============ TELA DE LOGIN ============ -->
+<div id="tela-login">
+  <div class="card-login">
+    <h1>Sistema de Gestão Odontológica</h1>
+    <p>Entre com seu usuário e senha</p>
+    <label>Usuário</label>
+    <input type="text" id="login-usuario-input" placeholder="usuário ou e-mail" onkeydown="if(event.key==='Enter') fazerLogin()">
+    <label>Senha</label>
+    <input type="password" id="login-senha-input" placeholder="••••••••" onkeydown="if(event.key==='Enter') fazerLogin()">
+    <button class="btn-primario btn-bloco" id="login-btn-entrar" onclick="fazerLogin()">Entrar</button>
+    <div id="login-erro" style="color:var(--danger); font-size:12px; margin-top:10px;"></div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app">
+  <div class="layout">
+
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+      <div class="logo">Clínica<span>OS</span></div>
+      <nav id="menu-nav">
+        <div class="nav-item ativo" data-secao="dashboard" data-permissao="dashboard">📊 Dashboard</div>
+        <div class="nav-item" data-secao="agenda" data-permissao="agenda">📅 Agenda</div>
+        <div class="nav-item" data-secao="pacientes" data-permissao="pacientes">🧑‍🤝‍🧑 Pacientes</div>
+        <div class="nav-item" data-secao="orcamentos" data-permissao="orcamentos">🧾 Orçamentos</div>
+        <div class="nav-item" data-secao="contratos" data-permissao="contratos">📄 Contratos</div>
+        <div class="nav-item" data-secao="prontuarios" data-permissao="prontuarios">🦷 Prontuários</div>
+        <div class="nav-item" data-secao="financeiro" data-permissao="financeiro">💰 Financeiro</div>
+        <div class="nav-item" data-secao="usuarios" data-permissao="gerenciarUsuarios">👤 Usuários</div>
+        <div class="nav-item" data-secao="procedimentos" data-permissao="gerenciarCadastros">🛠️ Procedimentos</div>
+        <div class="nav-item" data-secao="configuracoes" data-permissao="configuracoes">⚙️ Configurações</div>
+      </nav>
+      <div class="rodape-usuario">
+        <b id="rodape-nome-usuario">—</b>
+        <span id="rodape-nivel-usuario">—</span><br>
+        <span onclick="fazerLogout()" style="color:var(--danger); cursor:pointer; text-decoration:underline;">Sair</span>
+      </div>
+    </div>
+
+    <!-- CONTEÚDO -->
+    <div id="conteudo">
+
+      <div class="aviso-protótipo" id="aviso-status-conexao">
+        🔄 Conectando ao banco de dados...
+      </div>
+
+      <!-- DASHBOARD -->
+      <div class="secao ativa" id="secao-dashboard">
+        <div class="cabecalho-secao">
+          <div><h2>Dashboard</h2><p>Visão geral da clínica hoje</p></div>
+        </div>
+        <div class="grid-3">
+          <div class="painel"><label>Consultas hoje</label><h2 id="kpi-consultas-hoje">3</h2></div>
+          <div class="painel"><label>Orçamentos pendentes</label><h2 id="kpi-orcamentos-pendentes">2</h2></div>
+          <div class="painel"><label>Receita do mês</label><h2 id="kpi-receita-mes">R$ 8.450,00</h2></div>
+        </div>
+      </div>
+
+      <!-- AGENDA (Multiagenda) -->
+      <div class="secao" id="secao-agenda">
+        <div class="cabecalho-secao">
+          <div><h2>Agenda</h2><p>Multiagenda — visão por profissional</p></div>
+        </div>
+
+        <div class="agenda-layout">
+
+          <!-- LATERAL: mini calendário + filtro de profissionais -->
+          <div class="agenda-lateral">
+            <div class="mini-calendario-cabecalho">
+              <button onclick="mudarMesMiniCalendario(-1)">&#8249;</button>
+              <span id="mini-calendario-titulo">Julho 2026</span>
+              <button onclick="mudarMesMiniCalendario(1)">&#8250;</button>
+            </div>
+            <table class="mini-calendario">
+              <thead><tr><th>Dom</th><th>Seg</th><th>Ter</th><th>Qua</th><th>Qui</th><th>Sex</th><th>Sáb</th></tr></thead>
+              <tbody id="mini-calendario-corpo"></tbody>
+            </table>
+
+            <label class="titulo-filtro">Pesquisar profissional</label>
+            <input type="text" id="agenda-busca-profissional" placeholder="Buscar por nome..." oninput="renderizarFiltroProfissionais()">
+
+            <label class="titulo-filtro">Profissionais</label>
+            <div class="lista-profissionais-filtro" id="lista-profissionais-filtro"></div>
+
+            <button class="btn-primario btn-bloco" onclick="renderizarColunasAgenda()">Aplicar filtro</button>
+          </div>
+
+          <!-- PRINCIPAL: colunas de horários -->
+          <div class="agenda-principal">
+            <div class="agenda-topo">
+              <button class="btn-secundario" onclick="irParaHoje()">Hoje</button>
+              <button class="nav-dia" onclick="mudarDiaAgenda(-1)">&#8249;</button>
+              <div class="data-atual">
+                <span id="agenda-dia-semana">Quarta-feira</span>
+                <span id="agenda-data-completa" style="font-weight:600; font-size:13px; color:var(--text-0);">15 · Julho - 2026</span>
+              </div>
+              <button class="nav-dia" onclick="mudarDiaAgenda(1)">&#8250;</button>
+            </div>
+
+            <div class="colunas-agenda" id="colunas-agenda"></div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- PACIENTES -->
+      <div class="secao" id="secao-pacientes">
+        <div class="cabecalho-secao">
+          <div><h2>Pacientes</h2><p>Cadastro e funil de pacientes</p></div>
+          <button class="btn-primario" onclick="abrirModalPaciente()">+ Novo Paciente</button>
+        </div>
+        <div class="painel">
+          <table>
+            <thead><tr><th>Nome</th><th>Telefone</th><th>Etapa do Funil</th><th></th></tr></thead>
+            <tbody id="tabela-pacientes"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ORÇAMENTOS -->
+      <div class="secao" id="secao-orcamentos">
+        <div class="cabecalho-secao">
+          <div><h2>Orçamentos</h2><p>Propostas de tratamento</p></div>
+          <button class="btn-primario" onclick="abrirModalOrcamento()">+ Novo Orçamento</button>
+        </div>
+        <div class="painel">
+          <table>
+            <thead><tr><th>Orçamento</th><th>Paciente</th><th>Validade</th><th>Total</th><th>Status</th><th>Contrato</th><th>Ações</th></tr></thead>
+            <tbody id="tabela-orcamentos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CONTRATOS -->
+      <div class="secao" id="secao-contratos">
+        <div class="cabecalho-secao">
+          <div><h2>Contratos</h2><p>Contratos gerados a partir de orçamentos aprovados</p></div>
+        </div>
+        <div class="painel">
+          <table>
+            <thead><tr><th>Paciente</th><th>Valor</th><th>Status</th><th>Gerado em</th><th>Assinatura</th><th>Ações</th></tr></thead>
+            <tbody id="tabela-contratos"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PRONTUÁRIOS -->
+      <div class="secao" id="secao-prontuarios">
+        <div class="cabecalho-secao">
+          <div><h2>Prontuários</h2><p>Histórico clínico por paciente</p></div>
+        </div>
+        <div class="painel"><p style="color:var(--text-1);">Selecione um paciente para ver o prontuário e odontograma (módulo a implementar).</p></div>
+      </div>
+
+      <!-- FINANCEIRO -->
+      <div class="secao" id="secao-financeiro">
+        <div class="cabecalho-secao">
+          <div><h2>Financeiro</h2><p id="financeiro-subtitulo">Fluxo de caixa da clínica</p></div>
+          <button class="btn-primario" id="btn-nova-transacao" onclick="mostrarToast('Modal de transação financeira — próxima etapa.')">+ Nova Transação</button>
+        </div>
+
+        <div class="painel" id="aviso-financeiro-restrito" style="display:none;">
+          <p style="color:var(--text-1); font-size:13px; margin:0;">
+            🔒 Seu nível de acesso permite apenas <b>registrar recebimentos</b>. Contas a pagar, despesas e relatórios completos são visíveis somente para o Administrador.
+          </p>
+        </div>
+
+        <div class="painel">
+          <table>
+            <thead>
+              <tr>
+                <th>Data</th><th>Categoria</th>
+                <th class="col-financeiro-completo">Tipo</th>
+                <th>Valor</th><th>Status</th>
+                <th>Recebido por</th>
+                <th class="col-financeiro-receber">Ação</th>
+                <th>Master</th>
+              </tr>
+            </thead>
+            <tbody id="tabela-financeiro"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CONFIGURAÇÕES -->
+      <div class="secao" id="secao-configuracoes">
+        <div class="cabecalho-secao">
+          <div><h2>Configurações</h2><p>Dados da clínica, profissionais e modelo de contrato</p></div>
+        </div>
+
+        <div class="painel">
+          <h3 style="margin-top:0;">Dados da Clínica</h3>
+          <div class="grid-2">
+            <div><label>Nome</label><input id="cfg-nome"></div>
+            <div><label>CNPJ</label><input id="cfg-cnpj"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Telefone</label><input id="cfg-telefone"></div>
+            <div><label>E-mail</label><input id="cfg-email"></div>
+          </div>
+          <label>Endereço</label>
+          <input id="cfg-endereco">
+          <button class="btn-primario" onclick="salvarDadosClinica()">Salvar</button>
+        </div>
+
+        <div class="painel">
+          <h3 style="margin-top:0;">Profissionais</h3>
+          <p style="color:var(--text-1); font-size:12px;">Cadastre os profissionais que atendem na clínica e o tempo médio de consulta de cada um — isso define a divisão dos horários na Agenda.</p>
+
+          <div class="grid-3">
+            <div><label>Nome</label><input id="prof-nome" placeholder="Ex: Dra. Ana Souza"></div>
+            <div><label>Especialidade</label><input id="prof-especialidade" placeholder="Ex: Ortodontia"></div>
+            <div><label>Tempo de consulta (min)</label><input id="prof-tempo-consulta" type="number" value="30"></div>
+          </div>
+          <div class="grid-3">
+            <div><label>Conselho de Classe</label>
+              <select id="prof-conselho-classe">
+                <option value="CRO">CRO — Odontologia</option>
+                <option value="CFBM">CFBM — Biomedicina</option>
+                <option value="CRM">CRM — Medicina</option>
+                <option value="COREN">COREN — Enfermagem</option>
+              </select>
+            </div>
+            <div><label>Estado</label><input id="prof-conselho-estado" placeholder="Ex: SP" maxlength="2" style="text-transform:uppercase;"></div>
+            <div><label>Número de Registro</label><input id="prof-conselho-numero" placeholder="Ex: 123456"></div>
+          </div>
+
+          <label>Dias Disponíveis na Agenda</label>
+          <div class="odontograma-toggle" id="prof-dias-disponiveis">
+            <button type="button" class="btn-secundario" data-dia="dom" onclick="alternarDiaDisponivel('dom')">Dom</button>
+            <button type="button" class="btn-secundario ativo" data-dia="seg" onclick="alternarDiaDisponivel('seg')">Seg</button>
+            <button type="button" class="btn-secundario ativo" data-dia="ter" onclick="alternarDiaDisponivel('ter')">Ter</button>
+            <button type="button" class="btn-secundario ativo" data-dia="qua" onclick="alternarDiaDisponivel('qua')">Qua</button>
+            <button type="button" class="btn-secundario ativo" data-dia="qui" onclick="alternarDiaDisponivel('qui')">Qui</button>
+            <button type="button" class="btn-secundario ativo" data-dia="sex" onclick="alternarDiaDisponivel('sex')">Sex</button>
+            <button type="button" class="btn-secundario" data-dia="sab" onclick="alternarDiaDisponivel('sab')">Sáb</button>
+          </div>
+
+          <div class="grid-2" style="margin-top:10px;">
+            <div><label>Início do Almoço</label><input type="time" id="prof-almoco-inicio" value="12:00"></div>
+            <div><label>Fim do Almoço</label><input type="time" id="prof-almoco-fim" value="13:00"></div>
+          </div>
+
+          <div class="grid-2" style="margin-top:10px;">
+            <div><label>Cor de identificação</label><input id="prof-cor" type="color" value="#2fd699" style="padding:4px; height:42px;"></div>
+            <div><label>&nbsp;</label><button class="btn-primario btn-bloco" id="prof-btn-salvar" onclick="salvarProfissional()">+ Adicionar Profissional</button></div>
+          </div>
+
+          <table style="margin-top:10px;">
+            <thead><tr><th>Nome</th><th>Especialidade</th><th>Tempo consulta</th><th>Conselho de Classe</th><th>Dias</th><th>Almoço</th><th>Cor</th><th></th></tr></thead>
+            <tbody id="tabela-profissionais"></tbody>
+          </table>
+        </div>
+
+        <div class="painel">
+          <h3 style="margin-top:0;">Modelo Padrão de Contrato</h3>
+          <p style="color:var(--text-1); font-size:12px;">
+            Use os botões abaixo para inserir variáveis que serão substituídas automaticamente pelos dados do orçamento.
+          </p>
+          <div style="margin-bottom:10px;">
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{paciente_nome}}')">+ Nome do Paciente</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{valor_total}}')">+ Valor Total</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{procedimentos_lista}}')">+ Procedimentos</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{valor_entrada}}')">+ Valor de Entrada</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{forma_pagamento_entrada}}')">+ Forma Pgto Entrada</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{valor_restante}}')">+ Valor Restante</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{forma_pagamento_restante}}')">+ Forma Pgto Restante</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{numero_parcelas}}')">+ Nº Parcelas</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{data_primeira_parcela}}')">+ Data 1ª Parcela</button>
+            <button class="btn-secundario" onclick="inserirPlaceholder('{{parcelas_detalhado}}')">+ Cronograma de Parcelas</button>
+          </div>
+          <div id="editor-template" contenteditable="true"
+               style="min-height:220px; background:var(--bg-2); border:1px solid var(--border); border-radius:8px; padding:14px; font-size:13px; line-height:1.6;">
+          </div>
+          <div style="margin-top:12px;">
+            <button class="btn-primario" onclick="salvarTemplateContrato()">Salvar Modelo</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- USUÁRIOS -->
+      <div class="secao" id="secao-usuarios">
+        <div class="cabecalho-secao">
+          <div><h2>Usuários</h2><p>Cadastro e níveis de acesso</p></div>
+        </div>
+
+        <div class="painel">
+          <p style="color:var(--text-1); font-size:12px;">
+            <b>Master</b>: acesso total e único usuário com permissão para editar ou excluir pagamentos já efetuados. Não pode ser editado nem excluído por ninguém.
+            <b>Administrador</b>: acesso total, exceto editar/excluir pagamentos; pode cadastrar e editar usuários Comercial, Secretária e Profissional de Saúde (não pode gerenciar Master nem outros Administradores).
+            <b>Comercial</b> e <b>Secretária</b>: agenda, pacientes, orçamentos e recebimentos — sem financeiro completo.
+            <b>Profissional de Saúde</b>: agenda, pacientes, orçamentos e prontuários — sem acesso ao financeiro.
+          </p>
+
+          <div class="grid-3">
+            <div><label>Nome</label><input id="usr-nome" placeholder="Ex: Carla Comercial"></div>
+            <div><label>E-mail / Usuário de login</label><input id="usr-email" placeholder="email@clinica.com"></div>
+            <div><label>Senha</label><input id="usr-senha" type="password" placeholder="••••••••"></div>
+          </div>
+          <div class="grid-2">
+            <div><label>Nível de Acesso</label>
+              <select id="usr-nivel">
+                <option value="administrador">Administrador</option>
+                <option value="comercial">Comercial</option>
+                <option value="secretaria">Secretária</option>
+                <option value="profissional_saude">Profissional de Saúde</option>
+              </select>
+            </div>
+            <div><label>&nbsp;</label><button class="btn-primario btn-bloco" id="usr-btn-salvar" onclick="salvarUsuario()">+ Adicionar Usuário</button></div>
+          </div>
+
+          <table style="margin-top:10px;">
+            <thead><tr><th>Nome</th><th>E-mail</th><th>Nível</th><th></th></tr></thead>
+            <tbody id="tabela-usuarios"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PROCEDIMENTOS -->
+      <div class="secao" id="secao-procedimentos">
+        <div class="cabecalho-secao">
+          <div><h2>Procedimentos</h2><p>Catálogo de serviços e valores padrão</p></div>
+        </div>
+
+        <div class="painel">
+          <p style="color:var(--text-1); font-size:12px;">Cadastre os procedimentos e valores padrão da clínica — eles alimentam o campo "Serviço/Produto" na tela de Orçamento.</p>
+
+          <div class="grid-3">
+            <div><label>Nome do Procedimento</label><input id="proc-nome" placeholder="Ex: Limpeza"></div>
+            <div><label>Categoria</label><input id="proc-categoria" placeholder="Ex: Preventivo"></div>
+            <div><label>Valor Padrão</label><input id="proc-valor" type="number" placeholder="0,00"></div>
+          </div>
+          <button class="btn-primario" id="proc-btn-salvar" onclick="salvarProcedimento()">+ Adicionar Procedimento</button>
+
+          <table style="margin-top:14px;">
+            <thead><tr><th>Nome</th><th>Categoria</th><th>Valor</th><th></th></tr></thead>
+            <tbody id="tabela-procedimentos"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAIS ============ -->
+<div class="modal-fundo" id="modal-paciente">
+  <div class="modal">
+    <h3>Novo Paciente</h3>
+    <label>Nome completo</label><input id="pac-nome" placeholder="Ex: Maria da Silva">
+    <div class="grid-2">
+      <div><label>CPF</label><input id="pac-cpf" placeholder="000.000.000-00"></div>
+      <div><label>Data de Nascimento</label><input type="date" id="pac-nascimento"></div>
+    </div>
+    <div class="grid-2">
+      <div><label>Telefone</label><input id="pac-telefone" placeholder="(00) 00000-0000"></div>
+      <div><label>E-mail</label><input id="pac-email" placeholder="email@exemplo.com"></div>
+    </div>
+    <label>Origem do Lead</label>
+    <select id="pac-origem">
+      <option value="indicacao">Indicação</option>
+      <option value="instagram">Instagram</option>
+      <option value="google">Google</option>
+      <option value="whatsapp">WhatsApp</option>
+      <option value="outro">Outro</option>
+    </select>
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="fecharModal('modal-paciente')">Cancelar</button>
+      <button class="btn-primario" onclick="salvarPaciente()">Salvar Paciente</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-orcamento">
+  <div class="modal modal-largo">
+    <h3>Novo Orçamento</h3>
+
+    <div class="grid-2">
+      <div><label>Paciente</label><select id="orc-paciente"></select></div>
+      <div><label>Nome do Orçamento</label><input id="orc-nome" placeholder="Ex: Tratamento odontológico"></div>
+    </div>
+    <div class="grid-2">
+      <div><label>Quem pode ver</label>
+        <select id="orc-visibilidade">
+          <option value="publico">Público — todos podem ver</option>
+          <option value="privado">Privado — só quem preencheu</option>
+        </select>
+      </div>
+      <div><label>Validade</label><input type="date" id="orc-validade"></div>
+    </div>
+
+    <div class="divisor-secao-modal">Adicionar Serviço/Produto</div>
+    <div class="grid-3">
+      <select id="orc-procedimento"></select>
+      <select id="orc-profissional-item"></select>
+      <input id="orc-qtd-item" type="number" placeholder="Qtd" value="1">
+    </div>
+    <div class="grid-2" style="margin-top:6px;">
+      <input id="orc-valor-item" type="number" placeholder="Valor">
+    </div>
+
+    <label style="margin-top:6px;">Selecione os dentes do serviço</label>
+    <div class="odontograma-toggle">
+      <button type="button" class="btn-secundario ativo" id="btn-odonto-permanentes" onclick="alternarTipoDenteOrcamento('permanentes')">Permanentes</button>
+      <button type="button" class="btn-secundario" id="btn-odonto-deciduos" onclick="alternarTipoDenteOrcamento('deciduos')">Decíduos</button>
+      <button type="button" class="btn-secundario" id="btn-odonto-boca-toda" onclick="alternarTipoDenteOrcamento('boca_toda')">🦷 Boca Toda</button>
+    </div>
+    <div class="odontograma-grade" id="odontograma-orcamento"></div>
+
+    <button class="btn-secundario btn-bloco" style="margin-top:12px;" onclick="incluirItemOrcamento()">+ Incluir Item</button>
+
+    <div class="divisor-secao-modal">Resumo do Orçamento</div>
+    <div id="lista-itens-orcamento"></div>
+
+    <div class="resumo-orcamento-totais">
+      <div><span>Subtotal</span><span id="orc-subtotal-label">R$ 0,00</span></div>
+      <div><span>Desconto</span><input id="orc-desconto" type="number" value="0" style="width:100px; margin:0; padding:4px 8px;" oninput="atualizarTotaisOrcamento()"></div>
+      <div class="total"><span>Total</span><span id="orc-valor-total-label">R$ 0,00</span></div>
+    </div>
+
+    <div class="divisor-secao-modal">Entrada</div>
+    <div class="grid-2">
+      <div><label>Valor de Entrada</label><input type="number" id="orc-valor-entrada" value="0" min="0" oninput="atualizarTotaisOrcamento()"></div>
+      <div><label>Forma de Pagamento da Entrada</label>
+        <select id="orc-forma-pagamento-entrada" onchange="atualizarTotaisOrcamento()">
+          <option value="pix">PIX</option>
+          <option value="debito">Débito</option>
+          <option value="credito_avista">Crédito à Vista</option>
+          <option value="credito_parcelado">Crédito Parcelado</option>
+          <option value="boleto">Boleto</option>
+          <option value="dinheiro">Dinheiro</option>
+          <option value="deposito">Depósito</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="divisor-secao-modal">Restante</div>
+    <label>Forma de Pagamento do Restante</label>
+    <select id="orc-forma-pagamento-restante" onchange="alternarCampoParcelasOrcamento()">
+      <option value="pix">PIX</option>
+      <option value="debito">Débito</option>
+      <option value="credito_avista">Crédito à Vista</option>
+      <option value="credito_parcelado">Crédito Parcelado</option>
+      <option value="boleto">Boleto</option>
+      <option value="dinheiro">Dinheiro</option>
+      <option value="deposito">Depósito</option>
+    </select>
+
+    <!-- Crédito Parcelado: pagamento imediato no cartão, parcelas iguais, sem vencimento pra clínica controlar -->
+    <div id="bloco-parcelas-cartao" style="display:none;">
+      <label>Nº de Parcelas no Cartão</label>
+      <input type="number" id="orc-parcelas-cartao" value="2" min="2" oninput="atualizarTotaisOrcamento()">
+      <p style="color:var(--text-1); font-size:11px; margin-top:-6px;">
+        Pagamento recebido integralmente hoje pela operadora de cartão — as parcelas são iguais e não geram vencimentos para a clínica controlar.
+      </p>
+    </div>
+
+    <!-- Demais formas: a clínica controla o recebível, precisa de vencimento -->
+    <div id="bloco-parcelamento" style="display:none;">
+      <div class="grid-2">
+        <div><label>Nº de Parcelas</label><input type="number" id="orc-parcelas" value="1" min="1" oninput="atualizarTotaisOrcamento()"></div>
+        <div><label>Vencimento da 1ª Parcela</label><input type="date" id="orc-data-primeira-parcela" oninput="atualizarTotaisOrcamento()"></div>
+      </div>
+      <p style="color:var(--text-1); font-size:11px; margin-top:-6px;">
+        As demais parcelas vencem automaticamente a cada 30 dias, no mesmo dia da primeira.
+      </p>
+    </div>
+
+    <div class="resumo-orcamento-totais" id="resumo-entrada-parcelas" style="display:none;">
+      <div><span>Valor de Entrada</span><span id="orc-entrada-label">R$ 0,00</span></div>
+      <div><span>Restante</span><span id="orc-restante-label">R$ 0,00</span></div>
+    </div>
+    <div id="lista-parcelas-preview"></div>
+
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="fecharModal('modal-orcamento')">Cancelar</button>
+      <button class="btn-primario" onclick="salvarOrcamento()">Finalizar e Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-agendamento">
+  <div class="modal modal-largo">
+    <h3 id="modal-agendamento-titulo">Marcar Agendamento</h3>
+
+    <div class="grid-2">
+      <input id="ag-nome-paciente" placeholder="Nome do paciente" list="lista-nomes-pacientes">
+      <datalist id="lista-nomes-pacientes"></datalist>
+      <select id="ag-genero">
+        <option value="">Gênero</option>
+        <option value="feminino">Feminino</option>
+        <option value="masculino">Masculino</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
+    <div class="grid-2">
+      <input id="ag-email" placeholder="E-mail">
+      <input id="ag-telefone" placeholder="Telefone">
+    </div>
+    <div class="grid-2">
+      <input type="date" id="ag-nascimento" placeholder="Data de nascimento">
+      <select id="ag-como-conheceu">
+        <option value="">Como nos conheceu</option>
+        <option value="indicacao">Indicação</option>
+        <option value="instagram">Instagram</option>
+        <option value="google">Google</option>
+        <option value="whatsapp">WhatsApp</option>
+      </select>
+    </div>
+
+    <div class="divisor-secao-modal">Dados do agendamento</div>
+    <div class="grid-3">
+      <div><label>Profissional</label><select id="ag-profissional"></select></div>
+      <div><label>Data</label><input type="date" id="ag-data"></div>
+      <div><label>Início</label><input type="time" id="ag-hora-inicio"></div>
+    </div>
+
+    <div class="grid-2" style="margin-top:6px;">
+      <select id="ag-procedimento">
+        <option value="">Procedimento</option>
+        <option value="consulta">Consulta — primeiro atendimento</option>
+        <option value="retorno_manutencao">Retorno — manutenção</option>
+        <option value="retorno_avaliacao">Retorno — avaliação</option>
+        <option value="limpeza">Limpeza</option>
+        <option value="canal">Canal</option>
+      </select>
+      <select id="ag-convenio">
+        <option value="">Convênio</option>
+        <option value="particular">Particular</option>
+        <option value="amil">Amil</option>
+        <option value="bradesco">Bradesco Saúde</option>
+        <option value="unimed">Unimed</option>
+      </select>
+    </div>
+    <div class="grid-2">
+      <input id="ag-valor" type="number" placeholder="Valor">
+      <select id="ag-status">
+        <option value="agendado">🟠 Agendado</option>
+        <option value="confirmado">🟢 Confirmado</option>
+        <option value="faltou">🔴 Faltou</option>
+        <option value="atendido">🔵 Atendido</option>
+        <option value="cancelar">✖ Cancelar (exclui o agendamento)</option>
+      </select>
+    </div>
+
+    <label>Observações do agendamento</label>
+    <textarea id="ag-observacoes" rows="2"></textarea>
+
+    <div class="checkbox-linha"><input type="checkbox" id="ag-whatsapp"> Aceita receber notificações via WhatsApp</div>
+    <div class="checkbox-linha"><input type="checkbox" id="ag-preferencial"> Paciente preferencial</div>
+
+    <div class="linha-total-agendamento">Total: <b id="ag-total-label">R$ 0,00</b></div>
+
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="fecharModal('modal-agendamento')">Fechar</button>
+      <button class="btn-primario" id="ag-btn-salvar" onclick="salvarAgendamentoCompleto()">Agendar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-prontuario-paciente">
+  <div class="modal modal-largo">
+    <h3 id="prontuario-nome-paciente">Prontuário do Paciente</h3>
+
+    <div class="abas-prontuario">
+      <div class="aba-prontuario ativa" data-aba="dados-pessoais" onclick="alternarAbaProntuario('dados-pessoais')">Dados Pessoais</div>
+      <div class="aba-prontuario" data-aba="orcamentos" onclick="alternarAbaProntuario('orcamentos')">Orçamentos</div>
+      <div class="aba-prontuario" data-aba="financeiro" onclick="alternarAbaProntuario('financeiro')">Financeiro</div>
+    </div>
+
+    <!-- ABA 1: Dados Pessoais -->
+    <div class="conteudo-aba-prontuario ativa" id="aba-dados-pessoais">
+      <div class="grid-2">
+        <div><label>Nome</label><input id="prontuario-view-nome" disabled></div>
+        <div><label>Telefone</label><input id="prontuario-view-telefone" disabled></div>
+      </div>
+      <div class="grid-2">
+        <div><label>CPF</label><input id="prontuario-view-cpf" disabled></div>
+        <div><label>Data de Nascimento</label><input id="prontuario-view-nascimento" disabled></div>
+      </div>
+      <div class="grid-2">
+        <div><label>E-mail</label><input id="prontuario-view-email" disabled></div>
+        <div><label>Origem do Lead</label><input id="prontuario-view-origem" disabled></div>
+      </div>
+      <div><label>Etapa do Funil</label><input id="prontuario-view-etapa" disabled></div>
+    </div>
+
+    <!-- ABA 2: Orçamentos -->
+    <div class="conteudo-aba-prontuario" id="aba-orcamentos">
+      <table>
+        <thead><tr><th>Orçamento</th><th>Data do Orçamento</th><th>Validade</th><th>Total</th><th>Status</th></tr></thead>
+        <tbody id="prontuario-tabela-orcamentos"></tbody>
+      </table>
+    </div>
+
+    <!-- ABA 3: Financeiro -->
+    <div class="conteudo-aba-prontuario" id="aba-financeiro-prontuario">
+      <div class="resumo-orcamento-totais" style="margin-bottom:14px;">
+        <div><span>Total em aberto</span><span id="prontuario-total-aberto">R$ 0,00</span></div>
+      </div>
+      <table>
+        <thead><tr><th>Descrição</th><th>Vencimento</th><th>Valor</th><th>Status</th><th>Ação</th></tr></thead>
+        <tbody id="prontuario-tabela-financeiro"></tbody>
+      </table>
+    </div>
+
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="fecharModal('modal-prontuario-paciente')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-editar-pagamento">
+  <div class="modal" style="width:440px;">
+    <h3>Editar Pagamento (Master)</h3>
+    <p style="color:var(--text-1); font-size:12px; margin-top:-8px;">
+      Alterações em pagamentos já efetuados só podem ser feitas pelo usuário Master.
+    </p>
+    <label>Categoria</label>
+    <input id="editar-pgto-categoria">
+    <label>Valor Total</label>
+    <input type="number" id="editar-pgto-valor">
+    <label>Valor Recebido</label>
+    <input type="number" id="editar-pgto-valor-recebido">
+    <label>Status</label>
+    <select id="editar-pgto-status">
+      <option value="pendente">Pendente</option>
+      <option value="parcial">Parcial</option>
+      <option value="pago">Pago</option>
+    </select>
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="fecharModal('modal-editar-pagamento')">Cancelar</button>
+      <button class="btn-primario" onclick="salvarEdicaoPagamento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-receber-pagamento">
+  <div class="modal" style="width:460px;">
+    <h3>Receber Pagamento</h3>
+    <p id="receber-descricao" style="color:var(--text-1); font-size:13px; margin-top:-8px;"></p>
+
+    <div class="resumo-orcamento-totais" style="margin-bottom:12px;">
+      <div><span>Valor total</span><span id="receber-valor-total-label">R$ 0,00</span></div>
+      <div><span>Já recebido</span><span id="receber-valor-recebido-label">R$ 0,00</span></div>
+      <div class="total"><span>Restante</span><span id="receber-valor-restante-label">R$ 0,00</span></div>
+    </div>
+
+    <label>Valor Recebido Agora</label>
+    <input type="number" id="receber-valor-input" min="0" oninput="validarValorRecebimento()">
+    <p id="receber-aviso-parcial" style="color:var(--warning); font-size:11px; margin-top:-8px; display:none;">
+      Pagamento parcial — o restante ficará pendente para recebimento futuro.
+    </p>
+
+    <label>Forma de Pagamento</label>
+    <select id="receber-forma-pagamento">
+      <option value="pix">PIX</option>
+      <option value="debito">Débito</option>
+      <option value="credito_avista">Crédito à Vista</option>
+      <option value="credito_parcelado">Crédito Parcelado</option>
+      <option value="boleto">Boleto</option>
+      <option value="dinheiro">Dinheiro</option>
+      <option value="deposito">Depósito</option>
+    </select>
+
+    <label>Recebido por</label>
+    <input id="receber-usuario-responsavel" disabled style="opacity:.7;">
+
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="cancelarModalReceberPagamento()">Cancelar</button>
+      <button class="btn-primario" onclick="confirmarRecebimento()">Confirmar Recebimento</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-bloqueio-agendamento">
+  <div class="modal" style="width:420px;">
+    <h3>Bloquear Agendamento</h3>
+    <input id="bloqueio-motivo" placeholder="Motivo do bloqueio">
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="fecharModal('modal-bloqueio-agendamento')">Cancelar</button>
+      <button class="btn-primario" onclick="confirmarBloqueioHorario()">Bloquear</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-negociacao-orcamento">
+  <div class="modal modal-largo">
+    <h3>Negociação Comercial</h3>
+    <p id="negociacao-titulo" style="color:var(--text-1); font-size:13px; margin-top:-8px;"></p>
+    <p style="color:var(--text-1); font-size:12px;">
+      Marque cada item como aprovado ou recusado conforme a decisão do paciente. O paciente pode optar por realizar apenas parte do tratamento proposto pelo dentista.
+    </p>
+
+    <div id="lista-itens-negociacao"></div>
+    <div id="negociacao-resumo"></div>
+
+    <div class="modal-acoes">
+      <button class="btn-primario" onclick="finalizarNegociacao()">Concluir</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-visualizar-contrato">
+  <div class="modal modal-largo">
+    <h3 id="visualizar-contrato-titulo">Contrato</h3>
+    <div id="visualizar-contrato-conteudo" style="background:var(--bg-2); border:1px solid var(--border); border-radius:8px; padding:18px; font-size:13px; line-height:1.7; max-height:400px; overflow-y:auto;"></div>
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="fecharModal('modal-visualizar-contrato')">Fechar</button>
+      <button class="btn-secundario" onclick="gerarPdfContrato(contratoEmVisualizacaoId)">Gerar PDF</button>
+      <button class="btn-primario" onclick="imprimirContrato(contratoEmVisualizacaoId)">Imprimir</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-fundo" id="modal-contrato-assinatura">
+  <div class="modal">
+    <h3>Assinatura do Contrato</h3>
+    <div id="contrato-texto-preview" style="background:var(--bg-2); border:1px solid var(--border); border-radius:8px; padding:14px; font-size:13px; max-height:220px; overflow-y:auto; margin-bottom:16px;"></div>
+
+    <label>Assinatura do Paciente</label>
+    <canvas class="assinatura" id="canvas-assinatura-paciente"></canvas>
+    <div style="margin:6px 0 16px;"><button class="btn-secundario" onclick="limparAssinatura('canvas-assinatura-paciente')">Limpar</button></div>
+
+    <label>Assinatura do Profissional</label>
+    <canvas class="assinatura" id="canvas-assinatura-profissional"></canvas>
+    <div style="margin:6px 0 16px;"><button class="btn-secundario" onclick="limparAssinatura('canvas-assinatura-profissional')">Limpar</button></div>
+
+    <div class="modal-acoes">
+      <button class="btn-secundario" onclick="fecharModal('modal-contrato-assinatura')">Fechar</button>
+      <button class="btn-primario" onclick="confirmarAssinaturaContrato()">Confirmar Assinatura</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================
+   FIREBASE — configuração e inicialização
+   Substitua pelos dados do SEU projeto Firebase (Console > Configurações do projeto)
+========================================================= */
+const firebaseConfig = {
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_PROJETO.firebaseapp.com",
+  projectId: "SEU_PROJETO",
+  storageBucket: "SEU_PROJETO.appspot.com",
+  messagingSenderId: "SEU_SENDER_ID",
+  appId: "SEU_APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+/* Arrays locais — funcionam como cache em memória, populados em tempo real
+   pelos listeners onSnapshot de cada coleção (ver carregarColecoes()). Todas as
+   funções de renderização já existentes continuam lendo destes mesmos arrays,
+   então a UI não precisou ser reescrita — só a origem dos dados mudou. */
+let pacientes = [];
+let orcamentos = [];
+let contratos = [];
+let procedimentos = [];
+let profissionais = [];
+let bloqueiosAgenda = [];
+let agendamentos = [];
+let financeiro = [];
+let usuarios = [];
+
+let dataSelecionadaAgenda = new Date();
+let mesExibidoMiniCalendario = new Date(dataSelecionadaAgenda.getFullYear(), dataSelecionadaAgenda.getMonth(), 1);
+let profissionaisSelecionadosIds = [];
+
+const PERMISSOES = {
+  master:              { dashboard:true, agenda:true, pacientes:true, orcamentos:true, contratos:true, prontuarios:true, financeiro:true, financeiroCompleto:true, configuracoes:true, financeiroEditarExcluir:true, gerenciarUsuarios:true, gerenciarCadastros:true },
+  administrador:       { dashboard:true, agenda:true, pacientes:true, orcamentos:true, contratos:true, prontuarios:true, financeiro:true, financeiroCompleto:true, configuracoes:true, financeiroEditarExcluir:false, gerenciarUsuarios:true, gerenciarCadastros:true },
+  comercial:           { dashboard:true, agenda:true, pacientes:true, orcamentos:true, contratos:true, prontuarios:false, financeiro:true, financeiroCompleto:false, configuracoes:false, financeiroEditarExcluir:false, gerenciarUsuarios:false, gerenciarCadastros:false },
+  secretaria:          { dashboard:true, agenda:true, pacientes:true, orcamentos:true, contratos:true, prontuarios:false, financeiro:true, financeiroCompleto:false, configuracoes:false, financeiroEditarExcluir:false, gerenciarUsuarios:false, gerenciarCadastros:false },
+  profissional_saude:  { dashboard:true, agenda:true, pacientes:true, orcamentos:true, contratos:true, prontuarios:true, financeiro:false, financeiroCompleto:false, configuracoes:false, financeiroEditarExcluir:false, gerenciarUsuarios:false, gerenciarCadastros:false }
+};
+
+const NOMES_NIVEL = {
+  master:'Master', administrador:'Administrador', comercial:'Comercial',
+  secretaria:'Secretária', profissional_saude:'Profissional de Saúde'
+};
+
+/* Regra: quem pode editar/excluir o usuário `alvo`, dado o nível de quem está logado.
+   - Master: pode gerenciar qualquer um, exceto a si mesmo (não pode ser excluído).
+   - Administrador: pode gerenciar comercial/secretaria/profissional_saude, NUNCA master nem outro administrador.
+   - Demais níveis: não gerenciam usuários. */
+function podeGerenciarUsuario(alvo){
+  if(!usuarioAtual) return false;
+  if(alvo.nivel === 'master') return false; // Master nunca pode ser editado/excluído por ninguém
+  if(usuarioAtual.nivel === 'master') return true;
+  if(usuarioAtual.nivel === 'administrador') return alvo.nivel !== 'administrador';
+  return false;
+}
+
+const STATUS_AGENDAMENTO = {
+  agendado:   { label:'Agendado',   cor:'#e2b23a' },
+  confirmado: { label:'Confirmado', cor:'#2fd699' },
+  faltou:     { label:'Faltou',     cor:'#e2555a' },
+  atendido:   { label:'Atendido',   cor:'#4f8cff' }
+};
+
+const FORMAS_PAGAMENTO = {
+  pix: 'PIX',
+  debito: 'Débito',
+  credito_avista: 'Crédito à Vista',
+  credito_parcelado: 'Crédito Parcelado',
+  boleto: 'Boleto',
+  dinheiro: 'Dinheiro',
+  deposito: 'Depósito'
+};
+
+let usuarioAtual = null;
+let itensOrcamentoAtual = [];
+
+/* Firestore usa IDs próprios (gerados pelo doc().id) — esta função só serve
+   como fallback para IDs auxiliares que não viram documento (ex: itens de orçamento). */
+let contadorId = 100;
+function gerarId(prefixo){ contadorId++; return prefixo + contadorId; }
+
+/* =========================================================
+   CARREGAMENTO EM TEMPO REAL — um listener por coleção.
+   Sempre que algo mudar no Firestore (por este navegador ou por outro
+   usuário/dispositivo), o array local é atualizado e a tela renderizada de novo.
+========================================================= */
+let listenersAtivos = [];
+
+function carregarColecoes(){
+  const mapaColecoes = [
+    { nome:'pacientes', array:() => pacientes, render:() => { renderizarPacientes(); renderizarPacientesNoSelect(); } },
+    { nome:'procedimentos', array:() => procedimentos, render:renderizarProcedimentos },
+    { nome:'profissionais', array:() => profissionais, render:() => { renderizarProfissionais(); renderizarFiltroProfissionais(); renderizarColunasAgenda(); } },
+    { nome:'orcamentos', array:() => orcamentos, render:renderizarOrcamentos },
+    { nome:'contratos', array:() => contratos, render:renderizarContratos },
+    { nome:'agendamentos', array:() => agendamentos, render:renderizarColunasAgenda },
+    { nome:'bloqueiosAgenda', array:() => bloqueiosAgenda, render:renderizarColunasAgenda },
+    { nome:'financeiro', array:() => financeiro, render:renderizarFinanceiro },
+    { nome:'usuarios', array:() => usuarios, render:renderizarUsuarios }
+  ];
+
+  mapaColecoes.forEach(col => {
+    const unsubscribe = db.collection(col.nome).onSnapshot(snapshot => {
+      const dados = snapshot.docs.map(doc => {
+        const d = doc.data();
+        // datas do Firestore (Timestamp) viram Date do JS, mantendo compatibilidade com o restante do código
+        if(d.criadoEm && d.criadoEm.toDate) d.criadoEm = d.criadoEm.toDate();
+        return { id: doc.id, ...d };
+      });
+      if(col.nome === 'pacientes') pacientes = dados;
+      if(col.nome === 'procedimentos') procedimentos = dados;
+      if(col.nome === 'profissionais') profissionais = dados;
+      if(col.nome === 'orcamentos') orcamentos = dados;
+      if(col.nome === 'contratos') contratos = dados;
+      if(col.nome === 'agendamentos') agendamentos = dados;
+      if(col.nome === 'bloqueiosAgenda') bloqueiosAgenda = dados;
+      if(col.nome === 'financeiro') financeiro = dados;
+      if(col.nome === 'usuarios') usuarios = dados;
+
+      // filtro da agenda: seleciona os 2 primeiros profissionais na primeira carga
+      if(col.nome === 'profissionais' && profissionaisSelecionadosIds.length === 0 && profissionais.length > 0){
+        profissionaisSelecionadosIds = profissionais.slice(0, 2).map(p => p.id);
+        renderizarFiltroProfissionais();
+      }
+
+      if(usuarioAtual) col.render(); // só re-renderiza depois de logado (telas existem no DOM)
+    }, erro => {
+      console.error(`Erro ao sincronizar ${col.nome}:`, erro);
+      mostrarToast(`Erro de conexão com o banco de dados (${col.nome}). Verifique sua internet.`);
+    });
+    listenersAtivos.push(unsubscribe);
+  });
+
+  carregarConfiguracoesClinica();
+  carregarTemplateContrato();
+}
+
+function pararListeners(){
+  listenersAtivos.forEach(unsub => unsub());
+  listenersAtivos = [];
+}
+
+/* =========================================================
+   SEED — popula o banco com dados iniciais SÓ na primeira vez
+   (coleção "usuarios" vazia = banco novo). Garante que o Master
+   sempre exista, mesmo em um projeto Firebase recém-criado.
+========================================================= */
+async function semearBancoDeDadosSeNecessario(){
+  const usuariosSnapshot = await db.collection('usuarios').limit(1).get();
+  if(!usuariosSnapshot.empty) return; // banco já tem dados, não faz nada
+
+  mostrarToast('Primeira execução — preparando dados iniciais...');
+
+  await db.collection('usuarios').doc('master').set({
+    login:'master', nome:'Master', email:'master@clinica.com', senha:'Estrela3342@', nivel:'master'
+  });
+  await db.collection('usuarios').add({ login:'ana@clinica.com', nome:'Dra. Ana Souza', email:'ana@clinica.com', senha:'123456', nivel:'administrador' });
+  await db.collection('usuarios').add({ login:'gabriel@clinica.com', nome:'Gabriel Pfau', email:'gabriel@clinica.com', senha:'123456', nivel:'profissional_saude' });
+  await db.collection('usuarios').add({ login:'carla@clinica.com', nome:'Carla Recepção', email:'carla@clinica.com', senha:'123456', nivel:'secretaria' });
+
+  await db.collection('procedimentos').add({ nome:'Cárie / Restauração', categoria:'Dentística', valor:100 });
+  await db.collection('procedimentos').add({ nome:'Limpeza', categoria:'Preventivo', valor:150 });
+  await db.collection('procedimentos').add({ nome:'Canal', categoria:'Endodontia', valor:900 });
+  await db.collection('procedimentos').add({ nome:'Extração', categoria:'Cirurgia', valor:250 });
+  await db.collection('procedimentos').add({ nome:'Implante', categoria:'Implantodontia', valor:3500 });
+
+  await db.collection('profissionais').add({ nome:'Gabriel Pfau', especialidade:'Clínico Geral', tempoConsultaMin:30, cor:'#2fd699', conselhoClasse:'CRO', conselhoEstado:'SP', conselhoNumero:'54321', diasDisponiveis:['seg','ter','qua','qui','sex'], almocoInicio:'12:00', almocoFim:'13:00' });
+  await db.collection('profissionais').add({ nome:'José Eduardo Passarelli', especialidade:'Ortodontia', tempoConsultaMin:45, cor:'#4f8cff', conselhoClasse:'CRO', conselhoEstado:'SP', conselhoNumero:'65432', diasDisponiveis:['seg','qua','sex'], almocoInicio:'12:00', almocoFim:'13:00' });
+  await db.collection('profissionais').add({ nome:'Vitor Armando Avilla de Mello', especialidade:'Implantodontia', tempoConsultaMin:60, cor:'#e2b23a', conselhoClasse:'CRO', conselhoEstado:'SP', conselhoNumero:'76543', diasDisponiveis:['ter','qua','qui','sab'], almocoInicio:'13:00', almocoFim:'14:00' });
+
+  await db.collection('clinica').doc('dados').set({
+    nome:'Clínica Odontológica Sorriso Pleno', cnpj:'12.345.678/0001-90',
+    telefone:'(19) 99999-0000', email:'contato@sorrisopleno.com.br', endereco:'Rua das Flores, 123 — Campinas/SP'
+  });
+
+  await db.collection('contratoTemplate').doc('ativo').set({
+    conteudoHtml: `Pelo presente instrumento, {{clinica_nome}}, inscrita no CNPJ {{clinica_cnpj}}, e o(a) paciente {{paciente_nome}},
+      portador(a) do CPF {{paciente_cpf}}, firmam o presente contrato de prestação de serviços odontológicos referente
+      a: {{procedimentos_lista}}, no valor total de {{valor_total}}. Deste valor, {{valor_entrada}} será pago como
+      entrada via {{forma_pagamento_entrada}}, e o restante de {{valor_restante}} será pago via {{forma_pagamento_restante}},
+      em {{numero_parcelas}} parcela(s), com vencimento da primeira em {{data_primeira_parcela}} (as demais a cada 30 dias
+      quando aplicável), conforme cronograma: {{parcelas_detalhado}}.`
+  });
+
+  mostrarToast('Dados iniciais criados com sucesso.');
+}
+
+/* =========================================================
+   LOGIN — autenticação por usuário e senha (consulta direta ao Firestore)
+========================================================= */
+async function fazerLogin(){
+  const loginDigitado = document.getElementById('login-usuario-input').value.trim().toLowerCase();
+  const senhaDigitada = document.getElementById('login-senha-input').value;
+  const botaoEntrar = document.getElementById('login-btn-entrar');
+
+  if(!loginDigitado || !senhaDigitada){
+    document.getElementById('login-erro').innerText = 'Informe usuário e senha.';
+    return;
+  }
+
+  botaoEntrar.disabled = true;
+  botaoEntrar.innerText = 'Entrando...';
+
+  try{
+    // Busca por login OU e-mail — Firestore não faz OR nativo em campos diferentes,
+    // então consulta os dois campos separadamente.
+    const [porLogin, porEmail] = await Promise.all([
+      db.collection('usuarios').where('login', '==', loginDigitado).limit(1).get(),
+      db.collection('usuarios').where('email', '==', loginDigitado).limit(1).get()
+    ]);
+    const doc = !porLogin.empty ? porLogin.docs[0] : (!porEmail.empty ? porEmail.docs[0] : null);
+    const encontrado = doc ? { id: doc.id, ...doc.data() } : null;
+
+    if(!encontrado || encontrado.senha !== senhaDigitada){
+      document.getElementById('login-erro').innerText = 'Usuário ou senha inválidos.';
+      return;
+    }
+
+    usuarioAtual = encontrado;
+    document.getElementById('login-erro').innerText = '';
+    document.getElementById('login-usuario-input').value = '';
+    document.getElementById('login-senha-input').value = '';
+
+    document.getElementById('rodape-nome-usuario').innerText = usuarioAtual.nome;
+    document.getElementById('rodape-nivel-usuario').innerText = NOMES_NIVEL[usuarioAtual.nivel];
+
+    aplicarPermissoesNaInterface();
+
+    document.getElementById('tela-login').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    renderizarTudo();
+  } catch(erro){
+    console.error('Erro ao fazer login:', erro);
+    document.getElementById('login-erro').innerText = 'Erro de conexão com o banco de dados. Tente novamente.';
+  } finally {
+    botaoEntrar.disabled = false;
+    botaoEntrar.innerText = 'Entrar';
+  }
+}
+
+function fazerLogout(){
+  usuarioAtual = null;
+  document.getElementById('tela-login').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+}
+
+/* =========================================================
+   CONTROLE DE ACESSO — aplica permissões na interface
+========================================================= */
+function aplicarPermissoesNaInterface(){
+  const permissoes = PERMISSOES[usuarioAtual.nivel];
+
+  // Esconde itens do menu lateral sem permissão
+  document.querySelectorAll('.nav-item').forEach(item => {
+    const chave = item.dataset.permissao;
+    item.style.display = permissoes[chave] ? 'flex' : 'none';
+  });
+
+  // Se a seção ativa no momento não é mais permitida, volta pro dashboard
+  const secaoAtiva = document.querySelector('.nav-item.ativo');
+  if(secaoAtiva && !permissoes[secaoAtiva.dataset.permissao]){
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('ativo'));
+    document.querySelectorAll('.secao').forEach(s => s.classList.remove('ativa'));
+    document.querySelector('[data-secao="dashboard"]').classList.add('ativo');
+    document.getElementById('secao-dashboard').classList.add('ativa');
+  }
+
+  // Financeiro: visão completa (admin) x visão restrita a recebimentos (recepcionista)
+  const financeiroCompleto = permissoes.financeiroCompleto;
+  document.getElementById('financeiro-subtitulo').innerText = financeiroCompleto
+    ? 'Fluxo de caixa da clínica'
+    : 'Recebimentos — registre pagamentos de pacientes';
+  document.getElementById('btn-nova-transacao').style.display = financeiroCompleto ? 'inline-block' : 'none';
+  document.getElementById('aviso-financeiro-restrito').style.display = financeiroCompleto ? 'none' : 'block';
+  document.querySelectorAll('.col-financeiro-completo').forEach(el => el.style.display = financeiroCompleto ? 'table-cell' : 'none');
+  document.querySelectorAll('.col-financeiro-receber').forEach(el => el.style.display = financeiroCompleto ? 'none' : 'table-cell');
+
+  renderizarFinanceiro();
+}
+
+/* =========================================================
+   USUÁRIOS (cadastro em Configurações)
+========================================================= */
+let usuarioEmEdicaoId = null;
+
+async function salvarUsuario(){
+  if(!usuarioAtual || !PERMISSOES[usuarioAtual.nivel].gerenciarUsuarios){
+    mostrarToast('Você não tem permissão para cadastrar/editar usuários.');
+    return;
+  }
+
+  const nome = document.getElementById('usr-nome').value;
+  const email = document.getElementById('usr-email').value;
+  const senha = document.getElementById('usr-senha').value;
+  const nivel = document.getElementById('usr-nivel').value;
+
+  if(!nome || !email){ mostrarToast('Informe nome e e-mail do usuário.'); return; }
+
+  // Administrador não pode criar/editar outro Administrador nem Master — só Master pode
+  if(nivel === 'administrador' && usuarioAtual.nivel !== 'master'){
+    mostrarToast('Apenas o Master pode cadastrar ou editar Administradores.');
+    return;
+  }
+
+  try{
+    if(usuarioEmEdicaoId){
+      const alvo = usuarios.find(u => u.id === usuarioEmEdicaoId);
+      if(!podeGerenciarUsuario(alvo)){
+        mostrarToast('Você não tem permissão para editar este usuário.');
+        return;
+      }
+      const dadosAtualizados = { nome, email, login: email, nivel };
+      if(senha) dadosAtualizados.senha = senha; // senha em branco = mantém a senha atual
+
+      await db.collection('usuarios').doc(usuarioEmEdicaoId).update(dadosAtualizados);
+      mostrarToast('Usuário atualizado com sucesso.');
+      usuarioEmEdicaoId = null;
+      document.getElementById('usr-btn-salvar').innerText = '+ Adicionar Usuário';
+    } else {
+      if(!senha){ mostrarToast('Informe uma senha para o novo usuário.'); return; }
+      await db.collection('usuarios').add({ login: email, nome, email, senha, nivel });
+      mostrarToast('Usuário cadastrado com sucesso.');
+    }
+
+    document.getElementById('usr-nome').value = '';
+    document.getElementById('usr-email').value = '';
+    document.getElementById('usr-senha').value = '';
+  } catch(erro){
+    console.error('Erro ao salvar usuário:', erro);
+    mostrarToast('Erro ao salvar no banco de dados. Tente novamente.');
+  }
+}
+
+function editarUsuario(id){
+  const alvo = usuarios.find(u => u.id === id);
+  if(!podeGerenciarUsuario(alvo)){
+    mostrarToast('Você não tem permissão para editar este usuário.');
+    return;
+  }
+  usuarioEmEdicaoId = id;
+  document.getElementById('usr-nome').value = alvo.nome;
+  document.getElementById('usr-email').value = alvo.email;
+  document.getElementById('usr-senha').value = '';
+  document.getElementById('usr-senha').placeholder = 'deixe em branco para manter a senha atual';
+  document.getElementById('usr-nivel').value = alvo.nivel;
+  document.getElementById('usr-btn-salvar').innerText = 'Salvar Alterações';
+}
+
+function renderizarUsuarios(){
+  const tabela = document.getElementById('tabela-usuarios');
+  tabela.innerHTML = usuarios.map(u => {
+    const podeGerenciar = podeGerenciarUsuario(u);
+    return `<tr>
+      <td>${u.nome}${u.nivel === 'master' ? ' 👑' : ''}</td>
+      <td>${u.email}</td>
+      <td><span class="badge badge-cinza">${NOMES_NIVEL[u.nivel]}</span></td>
+      <td>${podeGerenciar ? `
+        <button class="btn-secundario" onclick="editarUsuario('${u.id}')">Editar</button>
+        <button class="btn-secundario" onclick="removerUsuario('${u.id}')">Remover</button>
+      ` : '<span style="color:var(--text-1); font-size:11px;">protegido</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function removerUsuario(id){
+  const alvo = usuarios.find(u => u.id === id);
+  if(!alvo) return;
+
+  if(!podeGerenciarUsuario(alvo)){
+    mostrarToast('Você não tem permissão para excluir este usuário.');
+    return;
+  }
+  if(usuarios.length <= 1){ mostrarToast('É necessário manter ao menos um usuário cadastrado.'); return; }
+
+  try{
+    await db.collection('usuarios').doc(id).delete();
+    mostrarToast('Usuário removido.');
+  } catch(erro){
+    console.error('Erro ao remover usuário:', erro);
+    mostrarToast('Erro ao remover no banco de dados.');
+  }
+}
+
+/* =========================================================
+   NAVEGAÇÃO ENTRE SEÇÕES
+========================================================= */
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('ativo'));
+    document.querySelectorAll('.secao').forEach(s => s.classList.remove('ativa'));
+    item.classList.add('ativo');
+    document.getElementById('secao-' + item.dataset.secao).classList.add('ativa');
+  });
+});
+
+function mostrarToast(mensagem){
+  const toast = document.getElementById('toast');
+  toast.innerText = mensagem;
+  toast.style.display = 'block';
+  setTimeout(() => toast.style.display = 'none', 2500);
+}
+
+function abrirModal(id){ document.getElementById(id).classList.add('ativo'); }
+function fecharModal(id){ document.getElementById(id).classList.remove('ativo'); }
+
+function formatarMoeda(valor){
+  return (valor || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' });
+}
+
+function renderizarTudo(){
+  renderizarPacientes();
+  renderizarPacientesNoSelect();
+  renderizarOrcamentos();
+  renderizarContratos();
+  renderizarFinanceiro();
+  renderizarProfissionais();
+  renderizarProcedimentos();
+  renderizarUsuarios();
+  renderizarFiltroProfissionais();
+  renderizarMiniCalendario();
+  renderizarCabecalhoAgenda();
+  renderizarColunasAgenda();
+}
+
+/* =========================================================
+   PACIENTES
+========================================================= */
+function abrirModalPaciente(){ abrirModal('modal-paciente'); }
+
+async function salvarPaciente(){
+  const nome = document.getElementById('pac-nome').value;
+  if(!nome){ mostrarToast('Informe o nome do paciente.'); return; }
+
+  try{
+    await db.collection('pacientes').add({
+      nome,
+      telefone: document.getElementById('pac-telefone').value,
+      etapaFunil: 'lead',
+      criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    mostrarToast('Paciente cadastrado com sucesso.');
+    fecharModal('modal-paciente');
+    document.getElementById('pac-nome').value = '';
+    document.getElementById('pac-telefone').value = '';
+  } catch(erro){
+    console.error('Erro ao salvar paciente:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+function renderizarPacientes(){
+  const tabela = document.getElementById('tabela-pacientes');
+  if(pacientes.length === 0){ tabela.innerHTML = '<tr><td colspan="4">Nenhum paciente cadastrado.</td></tr>'; return; }
+
+  tabela.innerHTML = pacientes.map(p => `
+    <tr>
+      <td>${p.nome}</td>
+      <td>${p.telefone || '-'}</td>
+      <td><span class="badge badge-cinza">${p.etapaFunil}</span></td>
+      <td><span style="color:var(--accent); cursor:pointer; text-decoration:underline;" onclick="abrirProntuarioPaciente('${p.id}')">Ver Prontuário</span></td>
+    </tr>
+  `).join('');
+}
+
+/* =========================================================
+   PRONTUÁRIO DO PACIENTE (popup com 3 abas)
+========================================================= */
+function abrirProntuarioPaciente(pacienteId){
+  const paciente = pacientes.find(p => p.id === pacienteId);
+  if(!paciente) return;
+
+  pacienteProntuarioAtualId = pacienteId; // usado para reabrir o prontuário após um recebimento
+
+  document.getElementById('prontuario-nome-paciente').innerText = `Prontuário — ${paciente.nome}`;
+
+  // Aba 1: Dados Pessoais
+  document.getElementById('prontuario-view-nome').value = paciente.nome || '';
+  document.getElementById('prontuario-view-telefone').value = paciente.telefone || '';
+  document.getElementById('prontuario-view-cpf').value = paciente.cpf || '-';
+  document.getElementById('prontuario-view-nascimento').value = paciente.dataNascimento || '-';
+  document.getElementById('prontuario-view-email').value = paciente.email || '-';
+  document.getElementById('prontuario-view-origem').value = paciente.origemLead || '-';
+  document.getElementById('prontuario-view-etapa').value = paciente.etapaFunil || '-';
+
+  // Aba 2: Orçamentos do paciente
+  const orcamentosDoPaciente = orcamentos.filter(o => o.pacienteId === pacienteId);
+  const tabelaOrcamentos = document.getElementById('prontuario-tabela-orcamentos');
+  tabelaOrcamentos.innerHTML = orcamentosDoPaciente.length === 0
+    ? '<tr><td colspan="5">Nenhum orçamento registrado para este paciente.</td></tr>'
+    : orcamentosDoPaciente.map(o => {
+        const resumo = calcularResumoAprovacao(o);
+        return `<tr>
+          <td>${o.nome}</td>
+          <td>${o.dataCriacao ? formatarDataBR(o.dataCriacao) : '-'}</td>
+          <td>${o.validade ? new Date(o.validade+'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
+          <td>${formatarMoeda(o.valorTotal)}</td>
+          <td><span class="badge ${resumo.badgeClasse}">${resumo.statusGeral}</span></td>
+        </tr>`;
+      }).join('');
+
+  // Aba 3: Financeiro — transações vinculadas + parcelas previstas nos orçamentos (devidas pelo paciente)
+  const transacoesDoPaciente = financeiro.filter(f => f.pacienteId === pacienteId);
+
+  const linhasTransacoes = transacoesDoPaciente.map(f => {
+    const restante = Math.max(f.valor - (f.valorRecebido || 0), 0);
+    const badgeStatus = { pago:'badge-verde', parcial:'badge-amarelo', pendente:'badge-cinza' }[f.status] || 'badge-cinza';
+    const botaoReceber = f.status !== 'pago'
+      ? `<button class="btn-secundario" onclick="receberPagamentoNoProntuario('${f.id}')">Receber Pagamento</button>`
+      : '';
+    return { linha: `<tr>
+        <td>${f.categoria}</td>
+        <td>${f.dataVencimento}</td>
+        <td>${formatarMoeda(f.valor)}${f.status === 'parcial' ? ` <span style="color:var(--text-1); font-size:11px;">(falta ${formatarMoeda(restante)})</span>` : ''}</td>
+        <td><span class="badge ${badgeStatus}">${f.status}</span></td>
+        <td>${botaoReceber}</td>
+      </tr>`, restante: f.status === 'pago' ? 0 : restante };
+  });
+
+  // Parcelas previstas no cronograma dos orçamentos (entrada + parcelas do restante) — cada uma já com atalho de recebimento
+  const linhasParcelas = [];
+  orcamentosDoPaciente.forEach(o => {
+    (o.parcelas || []).forEach(p => {
+      // se já existe uma transação financeira gerada para essa parcela específica, não duplica a linha aqui
+      const jaLancada = financeiro.some(f => f.origemParcela && f.origemParcela.orcamentoId === o.id && f.origemParcela.numero === p.numero);
+      if(jaLancada) return;
+
+      linhasParcelas.push({
+        linha: `<tr>
+          <td>${o.nome} — parcela ${p.numero}/${o.numeroParcelas}</td>
+          <td>${p.dataVencimento ? formatarDataBR(p.dataVencimento) : 'pagamento imediato (cartão)'}</td>
+          <td>${formatarMoeda(p.valor)}</td>
+          <td><span class="badge badge-cinza">pendente</span></td>
+          <td><button class="btn-secundario" onclick="receberParcelaOrcamentoNoProntuario('${o.id}', ${p.numero})">Receber Pagamento</button></td>
+        </tr>`,
+        restante: p.valor
+      });
+    });
+  });
+
+  const todasLinhas = [...linhasTransacoes, ...linhasParcelas];
+  const tabelaFinanceiro = document.getElementById('prontuario-tabela-financeiro');
+  tabelaFinanceiro.innerHTML = todasLinhas.length === 0
+    ? '<tr><td colspan="5">Nenhum lançamento financeiro para este paciente.</td></tr>'
+    : todasLinhas.map(l => l.linha).join('');
+
+  const totalEmAberto = todasLinhas.reduce((soma, l) => soma + l.restante, 0);
+  document.getElementById('prontuario-total-aberto').innerText = formatarMoeda(totalEmAberto);
+
+  alternarAbaProntuario('dados-pessoais');
+  abrirModal('modal-prontuario-paciente');
+}
+
+/* Abre o modal de recebimento já existente (mesmo do módulo Financeiro), lembrando de reabrir o prontuário depois */
+function receberPagamentoNoProntuario(idFinanceiro){
+  reabrirProntuarioAposRecebimentoId = pacienteProntuarioAtualId;
+  fecharModal('modal-prontuario-paciente');
+  abrirModalReceberPagamento(idFinanceiro);
+}
+
+/* Para uma parcela do orçamento que ainda não virou uma transação financeira: cria a transação sob demanda e abre o recebimento */
+async function receberParcelaOrcamentoNoProntuario(orcamentoId, numeroParcela){
+  const orcamento = orcamentos.find(o => o.id === orcamentoId);
+  const parcela = (orcamento.parcelas || []).find(p => p.numero === numeroParcela);
+  if(!orcamento || !parcela) return;
+
+  try{
+    const refNovaTransacao = await db.collection('financeiro').add({
+      dataVencimento: parcela.dataVencimento ? formatarDataBR(parcela.dataVencimento) : 'Imediato (cartão)',
+      categoria: `${orcamento.nome} — parcela ${parcela.numero}/${orcamento.numeroParcelas}`,
+      tipo: 'receita',
+      valor: parcela.valor,
+      valorRecebido: 0,
+      status: 'pendente',
+      pacienteId: orcamento.pacienteId,
+      recebimentos: [],
+      origemParcela: { orcamentoId: orcamento.id, numero: parcela.numero }
+    });
+
+    reabrirProntuarioAposRecebimentoId = pacienteProntuarioAtualId;
+    fecharModal('modal-prontuario-paciente');
+    abrirModalReceberPagamento(refNovaTransacao.id);
+  } catch(erro){
+    console.error('Erro ao criar transação da parcela:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+function alternarAbaProntuario(nomeAba){
+  document.querySelectorAll('.aba-prontuario').forEach(el => el.classList.toggle('ativa', el.dataset.aba === nomeAba));
+  document.querySelectorAll('.conteudo-aba-prontuario').forEach(el => el.classList.remove('ativa'));
+  const mapaId = { 'dados-pessoais':'aba-dados-pessoais', 'orcamentos':'aba-orcamentos', 'financeiro':'aba-financeiro-prontuario' };
+  document.getElementById(mapaId[nomeAba]).classList.add('ativa');
+}
+
+function renderizarPacientesNoSelect(){
+  const select = document.getElementById('orc-paciente');
+  select.innerHTML = pacientes.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+}
+
+/* =========================================================
+   ODONTOGRAMA (seletor de dentes usado no orçamento)
+========================================================= */
+const DENTES_PERMANENTES = {
+  superior: [18,17,16,15,14,13,12,11, 21,22,23,24,25,26,27,28],
+  inferior: [48,47,46,45,44,43,42,41, 31,32,33,34,35,36,37,38]
+};
+const DENTES_DECIDUOS = {
+  superior: [55,54,53,52,51, 61,62,63,64,65],
+  inferior: [85,84,83,82,81, 71,72,73,74,75]
+};
+
+let tipoDenteAtualOrcamento = 'permanentes';
+let dentesSelecionadosTemp = [];
+
+function alternarTipoDenteOrcamento(tipo){
+  tipoDenteAtualOrcamento = tipo;
+  document.getElementById('btn-odonto-permanentes').classList.toggle('ativo', tipo === 'permanentes');
+  document.getElementById('btn-odonto-deciduos').classList.toggle('ativo', tipo === 'deciduos');
+  document.getElementById('btn-odonto-boca-toda').classList.toggle('ativo', tipo === 'boca_toda');
+  dentesSelecionadosTemp = [];
+  renderizarOdontogramaOrcamento();
+}
+
+function renderizarOdontogramaOrcamento(){
+  const container = document.getElementById('odontograma-orcamento');
+
+  if(tipoDenteAtualOrcamento === 'boca_toda'){
+    dentesSelecionadosTemp = ['Boca Toda'];
+    container.innerHTML = `
+      <div style="text-align:center; padding:20px; color:var(--text-1); font-size:13px;">
+        🦷 Procedimento será aplicado à <b style="color:var(--text-0);">boca toda</b>, sem necessidade de marcar dentes específicos.
+      </div>`;
+    return;
+  }
+
+  const grupo = tipoDenteAtualOrcamento === 'permanentes' ? DENTES_PERMANENTES : DENTES_DECIDUOS;
+  const linha = (numeros) => `<div class="odontograma-linha">${numeros.map(n => `
+    <div class="dente-botao ${dentesSelecionadosTemp.includes(n) ? 'selecionado' : ''}" onclick="alternarDenteSelecionado(${n})">${n}</div>
+  `).join('')}</div>`;
+
+  container.innerHTML =
+    linha(grupo.superior) + '<div class="odontograma-divisor"></div>' + linha(grupo.inferior);
+}
+
+function alternarDenteSelecionado(numero){
+  if(dentesSelecionadosTemp.includes(numero)){
+    dentesSelecionadosTemp = dentesSelecionadosTemp.filter(n => n !== numero);
+  } else {
+    dentesSelecionadosTemp.push(numero);
+  }
+  renderizarOdontogramaOrcamento();
+}
+
+/* =========================================================
+   ORÇAMENTOS (fluxo integrado ao odontograma)
+========================================================= */
+function alternarCampoParcelasOrcamento(){
+  const formaRestante = document.getElementById('orc-forma-pagamento-restante').value;
+  const ehCartaoParcelado = formaRestante === 'credito_parcelado';
+
+  document.getElementById('bloco-parcelas-cartao').style.display = ehCartaoParcelado ? 'block' : 'none';
+  document.getElementById('bloco-parcelamento').style.display = ehCartaoParcelado ? 'none' : 'block';
+
+  if(ehCartaoParcelado){
+    document.getElementById('orc-parcelas').value = 1;
+    document.getElementById('orc-data-primeira-parcela').value = '';
+  } else {
+    document.getElementById('orc-parcelas-cartao').value = 2;
+  }
+  atualizarTotaisOrcamento();
+}
+
+/* Gera o cronograma de parcelas com vencimento: 1ª parcela na data escolhida, demais a cada 30 dias no mesmo dia.
+   Usado para todas as formas de pagamento, EXCETO Crédito Parcelado (que é pagamento imediato via cartão). */
+function gerarCronogramaParcelas(valorRestante, numeroParcelas, dataPrimeiraISO){
+  if(!dataPrimeiraISO || numeroParcelas < 1) return [];
+
+  const valorParcelaBase = Math.floor((valorRestante / numeroParcelas) * 100) / 100;
+  const parcelas = [];
+  let somaAcumulada = 0;
+
+  for(let i = 0; i < numeroParcelas; i++){
+    const data = new Date(dataPrimeiraISO + 'T00:00:00');
+    data.setDate(data.getDate() + (30 * i));
+
+    // a última parcela absorve a diferença de arredondamento centavo a centavo
+    const valor = (i === numeroParcelas - 1)
+      ? Math.round((valorRestante - somaAcumulada) * 100) / 100
+      : valorParcelaBase;
+
+    somaAcumulada += valor;
+    parcelas.push({ numero: i + 1, dataVencimento: data.toISOString().split('T')[0], valor });
+  }
+  return parcelas;
+}
+
+/* Gera parcelas iguais SEM data de vencimento — caso do Crédito Parcelado (operadora de cartão processa o recebimento) */
+function gerarParcelasCartao(valorRestante, numeroParcelas){
+  if(numeroParcelas < 1) return [];
+  const valorParcelaBase = Math.floor((valorRestante / numeroParcelas) * 100) / 100;
+  const parcelas = [];
+  let somaAcumulada = 0;
+
+  for(let i = 0; i < numeroParcelas; i++){
+    const valor = (i === numeroParcelas - 1)
+      ? Math.round((valorRestante - somaAcumulada) * 100) / 100
+      : valorParcelaBase;
+    somaAcumulada += valor;
+    parcelas.push({ numero: i + 1, valor });
+  }
+  return parcelas;
+}
+
+function formatarDataBR(dataISO){
+  return new Date(dataISO + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+function abrirModalOrcamento(){
+  itensOrcamentoAtual = [];
+  dentesSelecionadosTemp = [];
+  tipoDenteAtualOrcamento = 'permanentes';
+  document.getElementById('btn-odonto-permanentes').classList.add('ativo');
+  document.getElementById('btn-odonto-deciduos').classList.remove('ativo');
+  document.getElementById('btn-odonto-boca-toda').classList.remove('ativo');
+
+  document.getElementById('orc-nome').value = '';
+  document.getElementById('orc-validade').value = '';
+  document.getElementById('orc-desconto').value = 0;
+  document.getElementById('orc-forma-pagamento-entrada').value = 'pix';
+  document.getElementById('orc-forma-pagamento-restante').value = 'pix';
+  document.getElementById('orc-valor-entrada').value = 0;
+  document.getElementById('orc-parcelas').value = 1;
+  document.getElementById('orc-parcelas-cartao').value = 2;
+  document.getElementById('orc-data-primeira-parcela').value = '';
+  document.getElementById('lista-itens-orcamento').innerHTML = '';
+  alternarCampoParcelasOrcamento();
+
+  renderizarPacientesNoSelect();
+  carregarProcedimentosNoSelectOrcamento();
+  carregarProfissionaisNoSelectOrcamento();
+  renderizarOdontogramaOrcamento();
+
+  abrirModal('modal-orcamento');
+}
+
+function carregarProcedimentosNoSelectOrcamento(){
+  if(procedimentos.length === 0){
+    document.getElementById('orc-procedimento').innerHTML = '<option value="">Cadastre procedimentos em Configurações</option>';
+    document.getElementById('orc-valor-item').value = '';
+    return;
+  }
+  document.getElementById('orc-procedimento').innerHTML =
+    procedimentos.map(p => `<option value="${p.nome}" data-valor="${p.valor}">${p.nome}</option>`).join('');
+  document.getElementById('orc-valor-item').value = procedimentos[0].valor;
+}
+
+function carregarProfissionaisNoSelectOrcamento(){
+  document.getElementById('orc-profissional-item').innerHTML =
+    profissionais.map(p => `<option value="${p.id}">${p.nome}</option>`).join('');
+}
+
+document.addEventListener('change', (e) => {
+  if(e.target && e.target.id === 'orc-procedimento'){
+    const valorPadrao = e.target.options[e.target.selectedIndex]?.dataset.valor;
+    if(valorPadrao) document.getElementById('orc-valor-item').value = valorPadrao;
+  }
+});
+
+function incluirItemOrcamento(){
+  const servico = document.getElementById('orc-procedimento').value;
+  const profissionalSelect = document.getElementById('orc-profissional-item');
+  const profissionalNome = profissionalSelect.options[profissionalSelect.selectedIndex]?.text || '';
+  const qtd = parseInt(document.getElementById('orc-qtd-item').value) || 1;
+  const valorUnitario = parseFloat(document.getElementById('orc-valor-item').value) || 0;
+
+  if(dentesSelecionadosTemp.length === 0){
+    mostrarToast('Selecione ao menos um dente no odontograma.');
+    return;
+  }
+
+  itensOrcamentoAtual.push({
+    servico, profissionalNome, qtd,
+    valorUnitario, valorTotal: valorUnitario * qtd,
+    dentes: [...dentesSelecionadosTemp],
+    statusItem: 'pendente' // etapa 1: dentista apenas registra a necessidade, sem decisão comercial ainda
+  });
+
+  dentesSelecionadosTemp = [];
+  renderizarOdontogramaOrcamento();
+  renderizarItensOrcamento();
+}
+
+function renderizarItensOrcamento(){
+  const container = document.getElementById('lista-itens-orcamento');
+  container.innerHTML = itensOrcamentoAtual.map((item, i) => `
+    <div class="item-orcamento-linha">
+      <div>
+        <div><b>${item.servico}</b> — ${item.qtd}x (${item.profissionalNome})</div>
+        <div class="dentes-tag">${item.dentes[0] === 'Boca Toda' ? '🦷 Boca Toda' : 'Dentes: ' + item.dentes.join(', ')}</div>
+      </div>
+      <div style="text-align:right;">
+        ${formatarMoeda(item.valorTotal)}<br>
+        <button onclick="removerItemOrcamento(${i})">Remover</button>
+      </div>
+    </div>
+  `).join('');
+  atualizarTotaisOrcamento();
+}
+
+function removerItemOrcamento(indice){
+  itensOrcamentoAtual.splice(indice, 1);
+  renderizarItensOrcamento();
+}
+
+function atualizarTotaisOrcamento(){
+  const subtotal = itensOrcamentoAtual.reduce((soma, i) => soma + i.valorTotal, 0);
+  const desconto = parseFloat(document.getElementById('orc-desconto')?.value) || 0;
+  const total = Math.max(subtotal - desconto, 0);
+  document.getElementById('orc-subtotal-label').innerText = formatarMoeda(subtotal);
+  document.getElementById('orc-valor-total-label').innerText = formatarMoeda(total);
+
+  const formaRestante = document.getElementById('orc-forma-pagamento-restante')?.value;
+  const valorEntrada = Math.min(parseFloat(document.getElementById('orc-valor-entrada')?.value) || 0, total);
+  const restante = Math.max(total - valorEntrada, 0);
+
+  document.getElementById('resumo-entrada-parcelas').style.display = valorEntrada > 0 ? 'block' : 'none';
+  document.getElementById('orc-entrada-label').innerText = formatarMoeda(valorEntrada);
+  document.getElementById('orc-restante-label').innerText = formatarMoeda(restante);
+
+  const previewContainer = document.getElementById('lista-parcelas-preview');
+
+  if(formaRestante === 'credito_parcelado'){
+    const numeroParcelas = parseInt(document.getElementById('orc-parcelas-cartao').value) || 1;
+    const parcelas = gerarParcelasCartao(restante, numeroParcelas);
+    previewContainer.innerHTML = parcelas.map(p => `
+      <div style="display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px solid var(--border);">
+        <span>${p.numero}ª parcela no cartão (pagamento imediato)</span>
+        <span>${formatarMoeda(p.valor)}</span>
+      </div>`).join('');
+  } else {
+    const numeroParcelas = parseInt(document.getElementById('orc-parcelas').value) || 1;
+    const dataPrimeira = document.getElementById('orc-data-primeira-parcela').value;
+    const parcelas = gerarCronogramaParcelas(restante, numeroParcelas, dataPrimeira);
+
+    previewContainer.innerHTML = parcelas.length === 0
+      ? '<p style="color:var(--text-1); font-size:12px;">Informe a data de vencimento da 1ª parcela para ver o cronograma.</p>'
+      : parcelas.map(p => `
+          <div style="display:flex; justify-content:space-between; font-size:12px; padding:4px 0; border-bottom:1px solid var(--border);">
+            <span>${p.numero}ª parcela — vencimento ${formatarDataBR(p.dataVencimento)}</span>
+            <span>${formatarMoeda(p.valor)}</span>
+          </div>`).join('');
+  }
+}
+document.addEventListener('input', (e) => {
+  if(e.target && ['orc-desconto','orc-valor-entrada','orc-parcelas','orc-parcelas-cartao','orc-data-primeira-parcela'].includes(e.target.id)){
+    atualizarTotaisOrcamento();
+  }
+});
+
+async function salvarOrcamento(){
+  const pacienteId = document.getElementById('orc-paciente').value;
+  const nomeOrcamento = document.getElementById('orc-nome').value || 'Orçamento sem título';
+
+  if(!pacienteId || itensOrcamentoAtual.length === 0){
+    mostrarToast('Selecione o paciente e inclua ao menos um item.');
+    return;
+  }
+
+  const subtotal = itensOrcamentoAtual.reduce((soma, i) => soma + i.valorTotal, 0);
+  const desconto = parseFloat(document.getElementById('orc-desconto').value) || 0;
+  const valorTotal = Math.max(subtotal - desconto, 0);
+  const formaPagamentoEntrada = document.getElementById('orc-forma-pagamento-entrada').value;
+  const formaPagamentoRestante = document.getElementById('orc-forma-pagamento-restante').value;
+  const valorEntrada = Math.min(parseFloat(document.getElementById('orc-valor-entrada').value) || 0, valorTotal);
+  const valorRestante = Math.max(valorTotal - valorEntrada, 0);
+
+  let numeroParcelas = 1;
+  let dataPrimeiraParcela = '';
+  let parcelas = [];
+
+  if(formaPagamentoRestante === 'credito_parcelado'){
+    // pagamento imediato via cartão — parcelas iguais, sem vencimento pra clínica controlar
+    numeroParcelas = parseInt(document.getElementById('orc-parcelas-cartao').value) || 1;
+    parcelas = gerarParcelasCartao(valorRestante, numeroParcelas);
+  } else {
+    numeroParcelas = parseInt(document.getElementById('orc-parcelas').value) || 1;
+    dataPrimeiraParcela = document.getElementById('orc-data-primeira-parcela').value;
+
+    if(!dataPrimeiraParcela){
+      mostrarToast('Informe a data de vencimento da 1ª parcela.');
+      return;
+    }
+    parcelas = gerarCronogramaParcelas(valorRestante, numeroParcelas, dataPrimeiraParcela);
+  }
+
+  try{
+    await db.collection('orcamentos').add({
+      nome: nomeOrcamento,
+      pacienteId,
+      visibilidade: document.getElementById('orc-visibilidade').value,
+      dataCriacao: formatarDataISO(new Date()),
+      validade: document.getElementById('orc-validade').value,
+      itens: itensOrcamentoAtual,
+      subtotal, desconto, valorTotal,
+      formaPagamentoEntrada,
+      formaPagamentoRestante,
+      valorEntrada,
+      valorRestante,
+      numeroParcelas,
+      dataPrimeiraParcela,
+      parcelas,
+      contratoGeradoId: null,
+      travadoParaEdicao: false
+    });
+
+    mostrarToast('Orçamento salvo com sucesso — pronto para a etapa de negociação comercial.');
+    fecharModal('modal-orcamento');
+  } catch(erro){
+    console.error('Erro ao salvar orçamento:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+/* ===== resumo de aprovação por item (etapa 2: negociação comercial) ===== */
+function calcularResumoAprovacao(orcamento){
+  const totalItens = orcamento.itens.length;
+  const aprovados = orcamento.itens.filter(i => i.statusItem === 'aprovado');
+  const recusados = orcamento.itens.filter(i => i.statusItem === 'recusado');
+  const pendentes = orcamento.itens.filter(i => i.statusItem === 'pendente');
+
+  const valorAprovado = aprovados.reduce((s, i) => s + i.valorTotal, 0);
+
+  let statusGeral, badgeClasse;
+  if(pendentes.length === totalItens){ statusGeral = 'Aguardando negociação'; badgeClasse = 'badge-cinza'; }
+  else if(aprovados.length === totalItens){ statusGeral = 'Aprovado (integral)'; badgeClasse = 'badge-verde'; }
+  else if(recusados.length === totalItens){ statusGeral = 'Recusado (integral)'; badgeClasse = 'badge-vermelho'; }
+  else if(pendentes.length === 0){ statusGeral = 'Parcialmente aprovado'; badgeClasse = 'badge-amarelo'; }
+  else { statusGeral = 'Negociação em andamento'; badgeClasse = 'badge-amarelo'; }
+
+  return { valorAprovado, statusGeral, badgeClasse, temAprovado: aprovados.length > 0 };
+}
+
+function renderizarOrcamentos(){
+  const tabela = document.getElementById('tabela-orcamentos');
+  if(orcamentos.length === 0){ tabela.innerHTML = '<tr><td colspan="7">Nenhum orçamento cadastrado.</td></tr>'; return; }
+
+  tabela.innerHTML = orcamentos.map(o => {
+    const paciente = pacientes.find(p => p.id === o.pacienteId);
+    const nomePaciente = paciente ? paciente.nome : '—';
+    const resumo = calcularResumoAprovacao(o);
+
+    const botaoContrato = (resumo.temAprovado && !o.contratoGeradoId)
+      ? `<button class="btn-secundario" onclick="gerarContrato('${o.id}')">Gerar Contrato</button>`
+      : (o.contratoGeradoId ? '<span class="badge badge-verde">Gerado</span>' : '-');
+
+    return `<tr>
+      <td>${o.nome}</td>
+      <td>${nomePaciente}</td>
+      <td>${o.validade ? new Date(o.validade+'T00:00:00').toLocaleDateString('pt-BR') : '-'}</td>
+      <td>
+        ${formatarMoeda(resumo.valorAprovado)}
+        <div style="font-size:11px; color:var(--text-1);">de ${formatarMoeda(o.valorTotal)} proposto</div>
+      </td>
+      <td><span class="badge ${resumo.badgeClasse}">${resumo.statusGeral}</span>
+        <div style="margin-top:6px;"><button class="btn-secundario" onclick="abrirNegociacaoOrcamento('${o.id}')">Negociar</button></div>
+      </td>
+      <td>${botaoContrato}</td>
+      <td>
+        <button class="btn-secundario" onclick="mostrarToast('Venda lançada no financeiro.')">Lançar Venda</button>
+        <button class="btn-secundario" onclick="mostrarToast('Compartilhar via WhatsApp — próxima etapa.')">Opções</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ===== Etapa 2: negociação — assessor comercial decide item a item ===== */
+let orcamentoEmNegociacaoId = null;
+
+function abrirNegociacaoOrcamento(orcamentoId){
+  orcamentoEmNegociacaoId = orcamentoId;
+  renderizarItensNegociacao();
+  abrirModal('modal-negociacao-orcamento');
+}
+
+function renderizarItensNegociacao(){
+  const orcamento = orcamentos.find(o => o.id === orcamentoEmNegociacaoId);
+  const paciente = pacientes.find(p => p.id === orcamento.pacienteId);
+  document.getElementById('negociacao-titulo').innerText = `${orcamento.nome} — ${paciente ? paciente.nome : ''}`;
+
+  const badgeItem = { pendente:'badge-cinza', aprovado:'badge-verde', recusado:'badge-vermelho' };
+
+  document.getElementById('lista-itens-negociacao').innerHTML = orcamento.itens.map((item, i) => `
+    <div class="item-orcamento-linha">
+      <div>
+        <div><b>${item.servico}</b> — ${item.qtd}x (${item.profissionalNome})</div>
+        <div class="dentes-tag">${item.dentes[0] === 'Boca Toda' ? '🦷 Boca Toda' : 'Dentes: ' + item.dentes.join(', ')}</div>
+        <span class="badge ${badgeItem[item.statusItem]}" style="margin-top:4px; display:inline-block;">${item.statusItem}</span>
+      </div>
+      <div style="text-align:right;">
+        ${formatarMoeda(item.valorTotal)}<br>
+        <button class="btn-secundario" style="padding:3px 8px; font-size:11px; margin-top:4px;" onclick="definirStatusItemNegociacao(${i}, 'aprovado')">✔ Aprovar</button>
+        <button class="btn-secundario" style="padding:3px 8px; font-size:11px;" onclick="definirStatusItemNegociacao(${i}, 'recusado')">✘ Recusar</button>
+      </div>
+    </div>
+  `).join('');
+
+  const resumo = calcularResumoAprovacao(orcamento);
+  document.getElementById('negociacao-resumo').innerHTML = `
+    <div class="resumo-orcamento-totais">
+      <div><span>Valor total proposto</span><span>${formatarMoeda(orcamento.valorTotal)}</span></div>
+      <div class="total"><span>Valor aprovado pelo paciente</span><span>${formatarMoeda(resumo.valorAprovado)}</span></div>
+    </div>`;
+}
+
+async function definirStatusItemNegociacao(indiceItem, novoStatus){
+  const orcamento = orcamentos.find(o => o.id === orcamentoEmNegociacaoId);
+  const itensAtualizados = [...orcamento.itens];
+  itensAtualizados[indiceItem] = { ...itensAtualizados[indiceItem], statusItem: novoStatus };
+
+  try{
+    await db.collection('orcamentos').doc(orcamentoEmNegociacaoId).update({ itens: itensAtualizados });
+    // atualiza a cópia local imediatamente para a UI responder sem esperar o próximo snapshot
+    orcamento.itens = itensAtualizados;
+    renderizarItensNegociacao();
+  } catch(erro){
+    console.error('Erro ao atualizar item do orçamento:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+function finalizarNegociacao(){
+  fecharModal('modal-negociacao-orcamento');
+  renderizarOrcamentos();
+  mostrarToast('Negociação atualizada — status do orçamento reflete o que foi aprovado.');
+}
+
+/* =========================================================
+   CONTRATOS — geração a partir do orçamento (snapshot)
+========================================================= */
+async function gerarContrato(orcamentoId){
+  const orcamento = orcamentos.find(o => o.id === orcamentoId);
+  const paciente = pacientes.find(p => p.id === orcamento.pacienteId);
+  const itensAprovados = orcamento.itens.filter(i => i.statusItem === 'aprovado');
+
+  if(itensAprovados.length === 0){
+    mostrarToast('Nenhum item foi aprovado pelo paciente ainda. Use "Negociar" antes de gerar o contrato.');
+    return;
+  }
+  const clinica = {
+    nome: document.getElementById('cfg-nome').value,
+    cnpj: document.getElementById('cfg-cnpj').value,
+    endereco: document.getElementById('cfg-endereco').value
+  };
+
+  const templateHtml = document.getElementById('editor-template').innerHTML;
+  const procedimentosLista = itensAprovados.map(i =>
+    i.dentes[0] === 'Boca Toda' ? `${i.servico} (boca toda)` : `${i.servico} (dentes ${i.dentes.join(', ')})`
+  ).join('; ');
+  const valorAprovado = itensAprovados.reduce((soma, i) => soma + i.valorTotal, 0);
+
+  // recalcula entrada/restante/parcelas com base no valor efetivamente aprovado (pode ser menor que o orçamento total)
+  const valorEntrada = Math.min(orcamento.valorEntrada || 0, valorAprovado);
+  const valorRestante = Math.max(valorAprovado - valorEntrada, 0);
+  const ehCartaoParcelado = orcamento.formaPagamentoRestante === 'credito_parcelado';
+
+  const parcelasRecalculadas = ehCartaoParcelado
+    ? gerarParcelasCartao(valorRestante, orcamento.numeroParcelas)
+    : gerarCronogramaParcelas(valorRestante, orcamento.numeroParcelas, orcamento.dataPrimeiraParcela);
+
+  const parcelasDetalhado = parcelasRecalculadas.length === 0
+    ? 'Pagamento único, sem parcelamento.'
+    : ehCartaoParcelado
+      ? parcelasRecalculadas.map(p => `${p.numero}ª parcela de ${formatarMoeda(p.valor)} (cartão de crédito, pagamento imediato)`).join('; ')
+      : parcelasRecalculadas.map(p => `${p.numero}ª parcela de ${formatarMoeda(p.valor)} com vencimento em ${formatarDataBR(p.dataVencimento)}`).join('; ');
+
+  const substituicoes = {
+    '{{paciente_nome}}': paciente.nome || '',
+    '{{paciente_cpf}}': '000.000.000-00',
+    '{{procedimentos_lista}}': procedimentosLista,
+    '{{valor_total}}': formatarMoeda(valorAprovado),
+    '{{valor_entrada}}': formatarMoeda(valorEntrada),
+    '{{valor_restante}}': formatarMoeda(valorRestante),
+    '{{forma_pagamento_entrada}}': FORMAS_PAGAMENTO[orcamento.formaPagamentoEntrada] || orcamento.formaPagamentoEntrada,
+    '{{forma_pagamento_restante}}': FORMAS_PAGAMENTO[orcamento.formaPagamentoRestante] || orcamento.formaPagamentoRestante,
+    '{{numero_parcelas}}': String(orcamento.numeroParcelas),
+    '{{valor_parcela}}': parcelasRecalculadas.length > 0 ? formatarMoeda(parcelasRecalculadas[0].valor) : formatarMoeda(valorRestante),
+    '{{data_primeira_parcela}}': (!ehCartaoParcelado && orcamento.dataPrimeiraParcela) ? formatarDataBR(orcamento.dataPrimeiraParcela) : 'pagamento imediato via cartão',
+    '{{parcelas_detalhado}}': parcelasDetalhado,
+    '{{clinica_nome}}': clinica.nome || '',
+    '{{clinica_endereco}}': clinica.endereco || '',
+    '{{clinica_cnpj}}': clinica.cnpj || '',
+    '{{data_atual}}': new Date().toLocaleDateString('pt-BR')
+  };
+
+  let conteudoFinal = templateHtml;
+  for(const chave in substituicoes){
+    conteudoFinal = conteudoFinal.split(chave).join(substituicoes[chave]);
+  }
+
+  const novoContrato = {
+    pacienteId: orcamento.pacienteId,
+    orcamentoId: orcamentoId,
+    conteudoFinal,
+    valorTotal: valorAprovado, // reflete só o que o paciente aprovou, não o orçamento total proposto
+    valorEntrada,
+    valorRestante,
+    parcelas: parcelasRecalculadas,
+    status: 'aguardando_assinatura',
+    criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+  };
+
+  try{
+    const refContrato = await db.collection('contratos').add(novoContrato);
+    await db.collection('orcamentos').doc(orcamentoId).update({ contratoGeradoId: refContrato.id });
+    mostrarToast('Contrato gerado com sucesso.');
+  } catch(erro){
+    console.error('Erro ao gerar contrato:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+function renderizarContratos(){
+  const tabela = document.getElementById('tabela-contratos');
+  if(contratos.length === 0){ tabela.innerHTML = '<tr><td colspan="6">Nenhum contrato gerado ainda.</td></tr>'; return; }
+
+  tabela.innerHTML = contratos.map(c => {
+    const paciente = pacientes.find(p => p.id === c.pacienteId);
+    const nomePaciente = paciente ? paciente.nome : '—';
+
+    const badgeStatus = {
+      rascunho:'badge-cinza', aguardando_assinatura:'badge-amarelo',
+      assinado:'badge-verde', cancelado:'badge-vermelho'
+    }[c.status] || 'badge-cinza';
+
+    return `<tr>
+      <td>${nomePaciente}</td>
+      <td>${formatarMoeda(c.valorTotal)}</td>
+      <td><span class="badge ${badgeStatus}">${c.status}</span></td>
+      <td>${c.criadoEm.toLocaleDateString('pt-BR')}</td>
+      <td>${c.status === 'aguardando_assinatura' ? `<button class="btn-secundario" onclick="abrirAssinaturaContrato('${c.id}')">Assinar</button>` : ''}</td>
+      <td>
+        <button class="btn-secundario" onclick="visualizarContrato('${c.id}')">Visualizar</button>
+        <button class="btn-secundario" onclick="gerarPdfContrato('${c.id}')">Gerar PDF</button>
+        <button class="btn-secundario" onclick="imprimirContrato('${c.id}')">Imprimir</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ===== Visualizar / Gerar PDF / Imprimir contrato ===== */
+function montarHtmlImpressaoContrato(contrato, paciente){
+  const dataGeracao = contrato.criadoEm.toLocaleDateString('pt-BR');
+  return `
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>Contrato — ${paciente ? paciente.nome : ''}</title>
+      <style>
+        body{ font-family: Georgia, 'Times New Roman', serif; color:#1a1a1a; padding:40px; line-height:1.7; font-size:14px; }
+        h1{ font-size:18px; border-bottom:1px solid #ccc; padding-bottom:10px; }
+        .meta{ color:#666; font-size:12px; margin-bottom:24px; }
+        .assinaturas{ display:flex; justify-content:space-between; margin-top:60px; }
+        .assinaturas div{ width:45%; border-top:1px solid #333; text-align:center; padding-top:6px; font-size:12px; }
+      </style>
+    </head>
+    <body>
+      <h1>Contrato de Prestação de Serviços Odontológicos</h1>
+      <div class="meta">Paciente: ${paciente ? paciente.nome : '-'} · Gerado em ${dataGeracao} · Status: ${contrato.status}</div>
+      <div>${contrato.conteudoFinal}</div>
+      <div class="assinaturas">
+        <div>Assinatura do Paciente</div>
+        <div>Assinatura do Profissional</div>
+      </div>
+    </body>
+    </html>`;
+}
+
+function visualizarContrato(contratoId){
+  const contrato = contratos.find(c => c.id === contratoId);
+  const paciente = pacientes.find(p => p.id === contrato.pacienteId);
+
+  document.getElementById('visualizar-contrato-titulo').innerText = `Contrato — ${paciente ? paciente.nome : ''}`;
+  document.getElementById('visualizar-contrato-conteudo').innerHTML = contrato.conteudoFinal;
+  contratoEmVisualizacaoId = contratoId;
+  abrirModal('modal-visualizar-contrato');
+}
+
+function imprimirContrato(contratoId){
+  const contrato = contratos.find(c => c.id === contratoId);
+  const paciente = pacientes.find(p => p.id === contrato.pacienteId);
+
+  const janela = window.open('', '_blank');
+  janela.document.write(montarHtmlImpressaoContrato(contrato, paciente));
+  janela.document.close();
+  janela.focus();
+  setTimeout(() => janela.print(), 300);
+}
+
+function gerarPdfContrato(contratoId){
+  // Sem backend de geração de PDF neste protótipo: usa a impressão do navegador,
+  // onde a opção "Salvar como PDF" está disponível como destino de impressão.
+  mostrarToast('Escolha "Salvar como PDF" na caixa de impressão que vai abrir.');
+  imprimirContrato(contratoId);
+}
+
+let contratoEmAssinaturaId = null;
+let contratoEmVisualizacaoId = null;
+
+function abrirAssinaturaContrato(contratoId){
+  contratoEmAssinaturaId = contratoId;
+  const contrato = contratos.find(c => c.id === contratoId);
+  document.getElementById('contrato-texto-preview').innerHTML = contrato.conteudoFinal;
+  abrirModal('modal-contrato-assinatura');
+  setTimeout(configurarCanvasAssinaturas, 100);
+}
+
+function configurarCanvasAssinaturas(){
+  ['canvas-assinatura-paciente','canvas-assinatura-profissional'].forEach(id => {
+    const canvas = document.getElementById(id);
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 2;
+    let desenhando = false;
+
+    canvas.onmousedown = e => { desenhando = true; ctx.beginPath(); ctx.moveTo(e.offsetX, e.offsetY); };
+    canvas.onmousemove = e => { if(desenhando){ ctx.lineTo(e.offsetX, e.offsetY); ctx.stroke(); } };
+    canvas.onmouseup = () => desenhando = false;
+    canvas.onmouseleave = () => desenhando = false;
+  });
+}
+
+function limparAssinatura(canvasId){
+  const canvas = document.getElementById(canvasId);
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width, canvas.height);
+}
+
+async function confirmarAssinaturaContrato(){
+  const contrato = contratos.find(c => c.id === contratoEmAssinaturaId);
+
+  const imagemPaciente = document.getElementById('canvas-assinatura-paciente').toDataURL();
+  const imagemProfissional = document.getElementById('canvas-assinatura-profissional').toDataURL();
+
+  try{
+    await db.collection('contratos').doc(contratoEmAssinaturaId).update({
+      status: 'assinado',
+      assinaturaPacienteImg: imagemPaciente,
+      assinaturaProfissionalImg: imagemProfissional,
+      assinadoEm: firebase.firestore.FieldValue.serverTimestamp(),
+      assinadoPor: usuarioAtual ? usuarioAtual.nome : null
+    });
+    await db.collection('orcamentos').doc(contrato.orcamentoId).update({ travadoParaEdicao: true });
+
+    mostrarToast('Contrato assinado com sucesso.');
+    fecharModal('modal-contrato-assinatura');
+  } catch(erro){
+    console.error('Erro ao assinar contrato:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+/* =========================================================
+   AGENDA (Multiagenda) — mini calendário
+========================================================= */
+const NOMES_MESES = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+const NOMES_DIAS_SEMANA = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+
+function formatarDataISO(data){
+  return data.getFullYear() + '-' + String(data.getMonth()+1).padStart(2,'0') + '-' + String(data.getDate()).padStart(2,'0');
+}
+
+function mudarMesMiniCalendario(delta){
+  mesExibidoMiniCalendario.setMonth(mesExibidoMiniCalendario.getMonth() + delta);
+  renderizarMiniCalendario();
+}
+
+function renderizarMiniCalendario(){
+  document.getElementById('mini-calendario-titulo').innerText =
+    NOMES_MESES[mesExibidoMiniCalendario.getMonth()] + ' ' + mesExibidoMiniCalendario.getFullYear();
+
+  const primeiroDia = new Date(mesExibidoMiniCalendario.getFullYear(), mesExibidoMiniCalendario.getMonth(), 1);
+  const ultimoDia = new Date(mesExibidoMiniCalendario.getFullYear(), mesExibidoMiniCalendario.getMonth()+1, 0);
+  const diaSemanaInicio = primeiroDia.getDay();
+
+  let celulas = [];
+  for(let i=0; i<diaSemanaInicio; i++) celulas.push(null);
+  for(let dia=1; dia<=ultimoDia.getDate(); dia++) celulas.push(dia);
+
+  let linhas = '';
+  for(let i=0; i<celulas.length; i+=7){
+    const semana = celulas.slice(i, i+7);
+    linhas += '<tr>' + semana.map(dia => {
+      if(dia === null) return '<td class="dia-vazio"></td>';
+      const dataCelula = new Date(mesExibidoMiniCalendario.getFullYear(), mesExibidoMiniCalendario.getMonth(), dia);
+      const selecionado = formatarDataISO(dataCelula) === formatarDataISO(dataSelecionadaAgenda);
+      return `<td class="${selecionado ? 'dia-selecionado' : ''}" onclick="selecionarDiaMiniCalendario(${dia})">${dia}</td>`;
+    }).join('') + '</tr>';
+  }
+  document.getElementById('mini-calendario-corpo').innerHTML = linhas;
+}
+
+function selecionarDiaMiniCalendario(dia){
+  dataSelecionadaAgenda = new Date(mesExibidoMiniCalendario.getFullYear(), mesExibidoMiniCalendario.getMonth(), dia);
+  renderizarMiniCalendario();
+  renderizarCabecalhoAgenda();
+  renderizarColunasAgenda();
+}
+
+function irParaHoje(){
+  dataSelecionadaAgenda = new Date();
+  mesExibidoMiniCalendario = new Date(dataSelecionadaAgenda.getFullYear(), dataSelecionadaAgenda.getMonth(), 1);
+  renderizarMiniCalendario();
+  renderizarCabecalhoAgenda();
+  renderizarColunasAgenda();
+}
+
+function mudarDiaAgenda(delta){
+  dataSelecionadaAgenda.setDate(dataSelecionadaAgenda.getDate() + delta);
+  mesExibidoMiniCalendario = new Date(dataSelecionadaAgenda.getFullYear(), dataSelecionadaAgenda.getMonth(), 1);
+  renderizarMiniCalendario();
+  renderizarCabecalhoAgenda();
+  renderizarColunasAgenda();
+}
+
+function renderizarCabecalhoAgenda(){
+  document.getElementById('agenda-dia-semana').innerText = NOMES_DIAS_SEMANA[dataSelecionadaAgenda.getDay()];
+  document.getElementById('agenda-data-completa').innerText =
+    dataSelecionadaAgenda.getDate() + ' · ' + NOMES_MESES[dataSelecionadaAgenda.getMonth()] + ' - ' + dataSelecionadaAgenda.getFullYear();
+}
+
+/* ===== filtro de profissionais (lateral) ===== */
+function renderizarFiltroProfissionais(){
+  const busca = (document.getElementById('agenda-busca-profissional')?.value || '').toLowerCase();
+  const container = document.getElementById('lista-profissionais-filtro');
+  const filtrados = profissionais.filter(p => p.nome.toLowerCase().includes(busca));
+
+  container.innerHTML = filtrados.map(p => `
+    <label class="item-profissional-filtro">
+      <input type="checkbox" ${profissionaisSelecionadosIds.includes(p.id) ? 'checked' : ''}
+             onchange="alternarProfissionalFiltro('${p.id}', this.checked)">
+      <span class="bolinha-cor" style="background:${p.cor}"></span>
+      ${p.nome}
+    </label>
+  `).join('') || '<p style="color:var(--text-1); font-size:12px;">Nenhum profissional encontrado.</p>';
+}
+
+function alternarProfissionalFiltro(id, marcado){
+  if(marcado && !profissionaisSelecionadosIds.includes(id)) profissionaisSelecionadosIds.push(id);
+  if(!marcado) profissionaisSelecionadosIds = profissionaisSelecionadosIds.filter(x => x !== id);
+}
+
+/* ===== colunas de horários (multiagenda) ===== */
+function gerarSlotsDoDia(tempoConsultaMin, almocoInicio, almocoFim){
+  const slots = [];
+  let minutos = 8*60; // início às 08:00
+  const fim = 19*60;  // até 19:00
+  const minutosAlmocoInicio = almocoInicio ? converterHoraParaMinutos(almocoInicio) : null;
+  const minutosAlmocoFim = almocoFim ? converterHoraParaMinutos(almocoFim) : null;
+
+  while(minutos < fim){
+    const dentroDoAlmoco = minutosAlmocoInicio !== null && minutos >= minutosAlmocoInicio && minutos < minutosAlmocoFim;
+    if(!dentroDoAlmoco){
+      const h = String(Math.floor(minutos/60)).padStart(2,'0');
+      const m = String(minutos%60).padStart(2,'0');
+      slots.push(`${h}:${m}`);
+    }
+    minutos += tempoConsultaMin;
+  }
+  return slots;
+}
+
+function converterHoraParaMinutos(hora){
+  const [h, m] = hora.split(':').map(Number);
+  return h*60 + m;
+}
+
+const DIAS_SEMANA_ABREV = ['dom','seg','ter','qua','qui','sex','sab']; // getDay() 0=domingo
+
+function renderizarColunasAgenda(){
+  const container = document.getElementById('colunas-agenda');
+  const dataISO = formatarDataISO(dataSelecionadaAgenda);
+  const diaSemanaAbrev = DIAS_SEMANA_ABREV[dataSelecionadaAgenda.getDay()];
+  const selecionados = profissionais.filter(p => profissionaisSelecionadosIds.includes(p.id));
+
+  if(selecionados.length === 0){
+    container.innerHTML = '<p style="color:var(--text-1); font-size:13px;">Selecione ao menos um profissional no filtro à esquerda.</p>';
+    return;
+  }
+
+  container.innerHTML = selecionados.map(prof => {
+    const iniciais = prof.nome.split(' ').filter(Boolean).slice(0,2).map(p => p[0]).join('').toUpperCase();
+
+    // Profissional não atende neste dia da semana — coluna aparece indisponível, sem horários
+    const atendeNesteDia = !prof.diasDisponiveis || prof.diasDisponiveis.includes(diaSemanaAbrev);
+    if(!atendeNesteDia){
+      return `<div class="coluna-profissional">
+        <div class="coluna-profissional-cabecalho">
+          <div class="avatar-iniciais" style="background:${prof.cor}">${iniciais}</div>
+          <div>
+            <b>${prof.nome}</b>
+            <small>${prof.especialidade} · consultas de ${prof.tempoConsultaMin}min</small>
+          </div>
+        </div>
+        <div class="slots-container">
+          <p style="color:var(--text-1); font-size:13px; text-align:center; padding:24px 10px;">
+            🚫 Profissional não atende neste dia.<br>Dias disponíveis: ${(prof.diasDisponiveis || []).map(d => NOMES_DIAS_ABREVIADO[d]).join(', ')}
+          </p>
+        </div>
+      </div>`;
+    }
+
+    const agendamentosDoDia = agendamentos.filter(a => a.profissionalId === prof.id && a.data === dataISO)
+      .sort((a,b) => a.horaInicio.localeCompare(b.horaInicio));
+    const bloqueiosDoDia = bloqueiosAgenda.filter(b => b.profissionalId === prof.id && b.data === dataISO);
+
+    const horariosOcupados = new Set([
+      ...agendamentosDoDia.map(a => a.horaInicio),
+      ...bloqueiosDoDia.map(b => b.hora)
+    ]);
+    const slotsDoDia = gerarSlotsDoDia(prof.tempoConsultaMin, prof.almocoInicio, prof.almocoFim).filter(h => !horariosOcupados.has(h));
+
+    // monta uma lista única mesclando ocupados, bloqueados e vazios, ordenada por horário
+    const itens = [
+      ...agendamentosDoDia.map(a => ({ tipo:'ocupado', hora:a.horaInicio, dado:a })),
+      ...bloqueiosDoDia.map(b => ({ tipo:'bloqueado', hora:b.hora, dado:b })),
+      ...slotsDoDia.map(h => ({ tipo:'vazio', hora:h }))
+    ].sort((a,b) => a.hora.localeCompare(b.hora));
+
+    const htmlItens = itens.map(item => {
+      if(item.tipo === 'vazio'){
+        return `<div class="slot-vazio">
+          <span class="horario-clicavel" onclick="abrirModalAgendamento('${prof.id}', '${item.hora}')">${item.hora}</span>
+          <span class="botao-bloquear" title="Bloquear horário" onclick="event.stopPropagation(); abrirModalBloqueio('${prof.id}', '${item.hora}')">🔒</span>
+        </div>`;
+      }
+      if(item.tipo === 'bloqueado'){
+        const b = item.dado;
+        return `<div class="slot-bloqueado" onclick="desbloquearHorario('${b.id}')" title="Clique para desbloquear">
+          <div class="horario">🔒 ${b.hora}</div>
+          <div class="motivo-bloqueio">${b.motivo || 'Horário bloqueado'}</div>
+        </div>`;
+      }
+      const a = item.dado;
+      const status = STATUS_AGENDAMENTO[a.status || 'agendado'];
+      return `<div class="slot-ocupado" style="border-left-color:${status.cor}; cursor:pointer;" onclick="editarAgendamento('${a.id}')">
+        <div class="horario">${a.horaInicio} — ${a.horaFim}</div>
+        <div class="nome-paciente">${a.pacienteNome}</div>
+        <div class="tipo-consulta">${a.tipo.toUpperCase()}</div>
+        <div class="local">${a.local}</div>
+        <span class="badge" style="background:${status.cor}22; color:${status.cor}; margin-top:6px;">${status.label}</span>
+      </div>`;
+    }).join('');
+
+    return `<div class="coluna-profissional">
+      <div class="coluna-profissional-cabecalho">
+        <div class="avatar-iniciais" style="background:${prof.cor}">${iniciais}</div>
+        <div>
+          <b>${prof.nome}</b>
+          <small>${prof.especialidade} · consultas de ${prof.tempoConsultaMin}min</small>
+        </div>
+      </div>
+      <div class="slots-container">${htmlItens}</div>
+    </div>`;
+  }).join('');
+}
+
+/* ===== modal de marcar agendamento (criação e edição) ===== */
+let profissionalSelecionadoModal = null;
+let agendamentoEmEdicaoId = null; // null = criando novo; preenchido = editando existente
+
+/* ===== bloqueio de horário ===== */
+let bloqueioTemp = { profissionalId:null, hora:null };
+
+function abrirModalBloqueio(profissionalId, hora){
+  bloqueioTemp = { profissionalId, hora };
+  document.getElementById('bloqueio-motivo').value = '';
+  abrirModal('modal-bloqueio-agendamento');
+}
+
+async function confirmarBloqueioHorario(){
+  const motivo = document.getElementById('bloqueio-motivo').value;
+  if(!motivo){ mostrarToast('Informe o motivo do bloqueio.'); return; }
+
+  try{
+    await db.collection('bloqueiosAgenda').add({
+      profissionalId: bloqueioTemp.profissionalId,
+      data: formatarDataISO(dataSelecionadaAgenda),
+      hora: bloqueioTemp.hora,
+      motivo
+    });
+    mostrarToast('Horário bloqueado com sucesso.');
+    fecharModal('modal-bloqueio-agendamento');
+  } catch(erro){
+    console.error('Erro ao bloquear horário:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+async function desbloquearHorario(bloqueioId){
+  try{
+    await db.collection('bloqueiosAgenda').doc(bloqueioId).delete();
+    mostrarToast('Bloqueio removido — horário disponível novamente.');
+  } catch(erro){
+    console.error('Erro ao remover bloqueio:', erro);
+    mostrarToast('Erro ao remover no banco de dados.');
+  }
+}
+
+function abrirModalAgendamento(profissionalId, horaInicio){
+  agendamentoEmEdicaoId = null;
+  profissionalSelecionadoModal = profissionalId;
+
+  document.getElementById('modal-agendamento-titulo').innerText = 'Marcar Agendamento';
+  document.getElementById('ag-btn-salvar').innerText = 'Agendar';
+
+  const select = document.getElementById('ag-profissional');
+  select.innerHTML = profissionais.map(p => `<option value="${p.id}" ${p.id===profissionalId?'selected':''}>${p.nome}</option>`).join('');
+
+  document.getElementById('ag-data').value = formatarDataISO(dataSelecionadaAgenda);
+  document.getElementById('ag-hora-inicio').value = horaInicio || '';
+  document.getElementById('ag-status').value = 'agendado';
+
+  document.getElementById('lista-nomes-pacientes').innerHTML = pacientes.map(p => `<option value="${p.nome}">`).join('');
+
+  ['ag-nome-paciente','ag-email','ag-telefone','ag-observacoes','ag-valor'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ag-total-label').innerText = formatarMoeda(0);
+
+  abrirModal('modal-agendamento');
+}
+
+function editarAgendamento(agendamentoId){
+  const agendamento = agendamentos.find(a => a.id === agendamentoId);
+  if(!agendamento) return;
+
+  agendamentoEmEdicaoId = agendamentoId;
+
+  document.getElementById('modal-agendamento-titulo').innerText = 'Editar Agendamento';
+  document.getElementById('ag-btn-salvar').innerText = 'Salvar Alterações';
+
+  const select = document.getElementById('ag-profissional');
+  select.innerHTML = profissionais.map(p => `<option value="${p.id}" ${p.id===agendamento.profissionalId?'selected':''}>${p.nome}</option>`).join('');
+
+  document.getElementById('lista-nomes-pacientes').innerHTML = pacientes.map(p => `<option value="${p.nome}">`).join('');
+
+  document.getElementById('ag-nome-paciente').value = agendamento.pacienteNome || '';
+  document.getElementById('ag-telefone').value = agendamento.telefone || '';
+  document.getElementById('ag-email').value = agendamento.email || '';
+  document.getElementById('ag-data').value = agendamento.data || '';
+  document.getElementById('ag-hora-inicio').value = agendamento.horaInicio || '';
+  document.getElementById('ag-valor').value = agendamento.valor || '';
+  document.getElementById('ag-observacoes').value = agendamento.observacoes || '';
+  document.getElementById('ag-status').value = agendamento.status || 'agendado';
+  document.getElementById('ag-total-label').innerText = formatarMoeda(agendamento.valor || 0);
+
+  abrirModal('modal-agendamento');
+}
+
+document.getElementById('ag-valor')?.addEventListener('input', function(){
+  document.getElementById('ag-total-label').innerText = formatarMoeda(parseFloat(this.value) || 0);
+});
+
+async function salvarAgendamentoCompleto(){
+  const nomePaciente = document.getElementById('ag-nome-paciente').value;
+  const profissionalId = document.getElementById('ag-profissional').value;
+  const data = document.getElementById('ag-data').value;
+  const horaInicio = document.getElementById('ag-hora-inicio').value;
+  const statusEscolhido = document.getElementById('ag-status').value;
+  const procedimentoSelect = document.getElementById('ag-procedimento');
+  const tipo = procedimentoSelect.options[procedimentoSelect.selectedIndex]?.text || 'Consulta';
+
+  // Cancelar = exclui o agendamento por completo
+  if(statusEscolhido === 'cancelar'){
+    if(!agendamentoEmEdicaoId){
+      mostrarToast('Não há agendamento para cancelar.');
+      return;
+    }
+    try{
+      await db.collection('agendamentos').doc(agendamentoEmEdicaoId).delete();
+      mostrarToast('Agendamento cancelado e excluído.');
+      fecharModal('modal-agendamento');
+    } catch(erro){
+      console.error('Erro ao cancelar agendamento:', erro);
+      mostrarToast('Erro ao excluir no banco de dados.');
+    }
+    return;
+  }
+
+  if(!nomePaciente || !profissionalId || !data || !horaInicio){
+    mostrarToast('Preencha nome do paciente, profissional, data e horário.');
+    return;
+  }
+
+  const prof = profissionais.find(p => p.id === profissionalId);
+  const [h, m] = horaInicio.split(':').map(Number);
+  const minutosFim = h*60 + m + (prof?.tempoConsultaMin || 30);
+  const horaFim = String(Math.floor(minutosFim/60)).padStart(2,'0') + ':' + String(minutosFim%60).padStart(2,'0');
+
+  const dadosAgendamento = {
+    profissionalId,
+    pacienteNome: nomePaciente,
+    telefone: document.getElementById('ag-telefone').value,
+    email: document.getElementById('ag-email').value,
+    horaInicio, horaFim,
+    tipo,
+    status: statusEscolhido,
+    valor: parseFloat(document.getElementById('ag-valor').value) || 0,
+    observacoes: document.getElementById('ag-observacoes').value,
+    local: 'Atendimentos em São Paulo',
+    data
+  };
+
+  try{
+    if(agendamentoEmEdicaoId){
+      await db.collection('agendamentos').doc(agendamentoEmEdicaoId).update(dadosAgendamento);
+      mostrarToast('Agendamento atualizado com sucesso.');
+    } else {
+      await db.collection('agendamentos').add(dadosAgendamento);
+      mostrarToast('Agendamento marcado com sucesso.');
+    }
+    fecharModal('modal-agendamento');
+  } catch(erro){
+    console.error('Erro ao salvar agendamento:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+/* =========================================================
+   PROCEDIMENTOS (cadastro em Configurações — Editar/Excluir só Master/Administrador)
+========================================================= */
+let procedimentoEmEdicaoId = null;
+
+function podeGerenciarCadastros(){
+  return usuarioAtual && PERMISSOES[usuarioAtual.nivel].gerenciarCadastros;
+}
+
+async function salvarProcedimento(){
+  if(!podeGerenciarCadastros()){ mostrarToast('Apenas Master ou Administrador podem cadastrar/editar procedimentos.'); return; }
+
+  const nome = document.getElementById('proc-nome').value;
+  const valor = parseFloat(document.getElementById('proc-valor').value);
+  if(!nome || isNaN(valor)){ mostrarToast('Informe nome e valor do procedimento.'); return; }
+
+  const categoria = document.getElementById('proc-categoria').value;
+
+  try{
+    if(procedimentoEmEdicaoId){
+      await db.collection('procedimentos').doc(procedimentoEmEdicaoId).update({ nome, categoria, valor });
+      mostrarToast('Procedimento atualizado com sucesso.');
+      procedimentoEmEdicaoId = null;
+      document.getElementById('proc-btn-salvar').innerText = '+ Adicionar Procedimento';
+    } else {
+      await db.collection('procedimentos').add({ nome, categoria, valor });
+      mostrarToast('Procedimento cadastrado com sucesso.');
+    }
+    document.getElementById('proc-nome').value = '';
+    document.getElementById('proc-categoria').value = '';
+    document.getElementById('proc-valor').value = '';
+  } catch(erro){
+    console.error('Erro ao salvar procedimento:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+function editarProcedimento(id){
+  if(!podeGerenciarCadastros()){ mostrarToast('Apenas Master ou Administrador podem editar procedimentos.'); return; }
+  const proc = procedimentos.find(p => p.id === id);
+  procedimentoEmEdicaoId = id;
+  document.getElementById('proc-nome').value = proc.nome;
+  document.getElementById('proc-categoria').value = proc.categoria || '';
+  document.getElementById('proc-valor').value = proc.valor;
+  document.getElementById('proc-btn-salvar').innerText = 'Salvar Alterações';
+}
+
+function renderizarProcedimentos(){
+  const tabela = document.getElementById('tabela-procedimentos');
+  const podeGerenciar = podeGerenciarCadastros();
+  if(procedimentos.length === 0){ tabela.innerHTML = '<tr><td colspan="4">Nenhum procedimento cadastrado.</td></tr>'; return; }
+
+  tabela.innerHTML = procedimentos.map(p => `
+    <tr>
+      <td>${p.nome}</td>
+      <td>${p.categoria || '-'}</td>
+      <td>${formatarMoeda(p.valor)}</td>
+      <td>${podeGerenciar ? `
+        <button class="btn-secundario" onclick="editarProcedimento('${p.id}')">Editar</button>
+        <button class="btn-secundario" onclick="removerProcedimento('${p.id}')">Remover</button>
+      ` : '<span style="color:var(--text-1); font-size:11px;">sem permissão</span>'}</td>
+    </tr>
+  `).join('');
+}
+
+async function removerProcedimento(id){
+  if(!podeGerenciarCadastros()){ mostrarToast('Apenas Master ou Administrador podem excluir procedimentos.'); return; }
+  try{
+    await db.collection('procedimentos').doc(id).delete();
+    mostrarToast('Procedimento removido.');
+  } catch(erro){
+    console.error('Erro ao remover procedimento:', erro);
+    mostrarToast('Erro ao remover no banco de dados.');
+  }
+}
+
+/* =========================================================
+   PROFISSIONAIS (cadastro em Configurações — Editar/Excluir só Master/Administrador)
+========================================================= */
+let profissionalEmEdicaoId = null;
+const NOMES_DIAS_ABREVIADO = { dom:'Dom', seg:'Seg', ter:'Ter', qua:'Qua', qui:'Qui', sex:'Sex', sab:'Sáb' };
+let diasSelecionadosProfissionalTemp = ['seg','ter','qua','qui','sex'];
+
+function alternarDiaDisponivel(dia){
+  if(diasSelecionadosProfissionalTemp.includes(dia)){
+    diasSelecionadosProfissionalTemp = diasSelecionadosProfissionalTemp.filter(d => d !== dia);
+  } else {
+    diasSelecionadosProfissionalTemp.push(dia);
+  }
+  document.querySelector(`#prof-dias-disponiveis [data-dia="${dia}"]`).classList.toggle('ativo');
+}
+
+function definirBotoesDiasDisponiveis(diasAtivos){
+  diasSelecionadosProfissionalTemp = [...diasAtivos];
+  document.querySelectorAll('#prof-dias-disponiveis [data-dia]').forEach(btn => {
+    btn.classList.toggle('ativo', diasAtivos.includes(btn.dataset.dia));
+  });
+}
+
+async function salvarProfissional(){
+  if(!podeGerenciarCadastros()){ mostrarToast('Apenas Master ou Administrador podem cadastrar/editar profissionais.'); return; }
+
+  const nome = document.getElementById('prof-nome').value;
+  if(!nome){ mostrarToast('Informe o nome do profissional.'); return; }
+  if(diasSelecionadosProfissionalTemp.length === 0){ mostrarToast('Selecione ao menos um dia disponível na agenda.'); return; }
+
+  const dados = {
+    nome,
+    especialidade: document.getElementById('prof-especialidade').value,
+    tempoConsultaMin: parseInt(document.getElementById('prof-tempo-consulta').value) || 30,
+    cor: document.getElementById('prof-cor').value,
+    conselhoClasse: document.getElementById('prof-conselho-classe').value,
+    conselhoEstado: document.getElementById('prof-conselho-estado').value,
+    conselhoNumero: document.getElementById('prof-conselho-numero').value,
+    diasDisponiveis: [...diasSelecionadosProfissionalTemp],
+    almocoInicio: document.getElementById('prof-almoco-inicio').value,
+    almocoFim: document.getElementById('prof-almoco-fim').value
+  };
+
+  try{
+    if(profissionalEmEdicaoId){
+      await db.collection('profissionais').doc(profissionalEmEdicaoId).update(dados);
+      mostrarToast('Profissional atualizado com sucesso.');
+      profissionalEmEdicaoId = null;
+      document.getElementById('prof-btn-salvar').innerText = '+ Adicionar Profissional';
+    } else {
+      await db.collection('profissionais').add(dados);
+      mostrarToast('Profissional cadastrado com sucesso.');
+    }
+
+    ['prof-nome','prof-especialidade','prof-conselho-estado','prof-conselho-numero'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('prof-tempo-consulta').value = 30;
+    document.getElementById('prof-almoco-inicio').value = '12:00';
+    document.getElementById('prof-almoco-fim').value = '13:00';
+    definirBotoesDiasDisponiveis(['seg','ter','qua','qui','sex']);
+  } catch(erro){
+    console.error('Erro ao salvar profissional:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+function editarProfissional(id){
+  if(!podeGerenciarCadastros()){ mostrarToast('Apenas Master ou Administrador podem editar profissionais.'); return; }
+  const p = profissionais.find(x => x.id === id);
+  profissionalEmEdicaoId = id;
+  document.getElementById('prof-nome').value = p.nome;
+  document.getElementById('prof-especialidade').value = p.especialidade || '';
+  document.getElementById('prof-tempo-consulta').value = p.tempoConsultaMin;
+  document.getElementById('prof-cor').value = p.cor;
+  document.getElementById('prof-conselho-classe').value = p.conselhoClasse || 'CRO';
+  document.getElementById('prof-conselho-estado').value = p.conselhoEstado || '';
+  document.getElementById('prof-conselho-numero').value = p.conselhoNumero || '';
+  document.getElementById('prof-almoco-inicio').value = p.almocoInicio || '12:00';
+  document.getElementById('prof-almoco-fim').value = p.almocoFim || '13:00';
+  definirBotoesDiasDisponiveis(p.diasDisponiveis || ['seg','ter','qua','qui','sex']);
+  document.getElementById('prof-btn-salvar').innerText = 'Salvar Alterações';
+}
+
+function renderizarProfissionais(){
+  const tabela = document.getElementById('tabela-profissionais');
+  const podeGerenciar = podeGerenciarCadastros();
+  tabela.innerHTML = profissionais.map(p => {
+    const diasTexto = (p.diasDisponiveis || []).map(d => NOMES_DIAS_ABREVIADO[d]).join(', ') || '-';
+    const almocoTexto = (p.almocoInicio && p.almocoFim) ? `${p.almocoInicio} - ${p.almocoFim}` : '-';
+    return `<tr>
+      <td>${p.nome}</td>
+      <td>${p.especialidade || '-'}</td>
+      <td>${p.tempoConsultaMin} min</td>
+      <td>${p.conselhoClasse ? `${p.conselhoClasse}/${p.conselhoEstado || '-'} ${p.conselhoNumero || ''}` : '-'}</td>
+      <td style="font-size:11px;">${diasTexto}</td>
+      <td style="font-size:11px;">${almocoTexto}</td>
+      <td><span class="bolinha-cor" style="background:${p.cor}"></span></td>
+      <td>${podeGerenciar ? `
+        <button class="btn-secundario" onclick="editarProfissional('${p.id}')">Editar</button>
+        <button class="btn-secundario" onclick="removerProfissional('${p.id}')">Remover</button>
+      ` : '<span style="color:var(--text-1); font-size:11px;">sem permissão</span>'}</td>
+    </tr>`;
+  }).join('');
+}
+
+async function removerProfissional(id){
+  if(!podeGerenciarCadastros()){ mostrarToast('Apenas Master ou Administrador podem excluir profissionais.'); return; }
+  try{
+    await db.collection('profissionais').doc(id).delete();
+    profissionaisSelecionadosIds = profissionaisSelecionadosIds.filter(x => x !== id);
+    mostrarToast('Profissional removido.');
+    renderizarFiltroProfissionais();
+    renderizarColunasAgenda();
+  } catch(erro){
+    console.error('Erro ao remover profissional:', erro);
+    mostrarToast('Erro ao remover no banco de dados.');
+  }
+}
+
+/* =========================================================
+   FINANCEIRO
+========================================================= */
+/* ===== edição/exclusão de pagamentos efetuados — EXCLUSIVO do Master ===== */
+let indicePagamentoEmEdicao = null;
+
+function abrirModalEditarPagamento(id){
+  if(!usuarioAtual || !PERMISSOES[usuarioAtual.nivel].financeiroEditarExcluir){
+    mostrarToast('Apenas o usuário Master pode editar pagamentos já efetuados.');
+    return;
+  }
+  indicePagamentoEmEdicao = id;
+  const f = financeiro.find(x => x.id === id);
+  document.getElementById('editar-pgto-categoria').value = f.categoria;
+  document.getElementById('editar-pgto-valor').value = f.valor;
+  document.getElementById('editar-pgto-valor-recebido').value = f.valorRecebido || 0;
+  document.getElementById('editar-pgto-status').value = f.status;
+  abrirModal('modal-editar-pagamento');
+}
+
+async function salvarEdicaoPagamento(){
+  if(!usuarioAtual || !PERMISSOES[usuarioAtual.nivel].financeiroEditarExcluir){
+    mostrarToast('Apenas o usuário Master pode editar pagamentos já efetuados.');
+    return;
+  }
+  try{
+    await db.collection('financeiro').doc(indicePagamentoEmEdicao).update({
+      categoria: document.getElementById('editar-pgto-categoria').value,
+      valor: parseFloat(document.getElementById('editar-pgto-valor').value) || 0,
+      valorRecebido: parseFloat(document.getElementById('editar-pgto-valor-recebido').value) || 0,
+      status: document.getElementById('editar-pgto-status').value
+    });
+    mostrarToast('Pagamento editado pelo Master.');
+    fecharModal('modal-editar-pagamento');
+  } catch(erro){
+    console.error('Erro ao editar pagamento:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+async function excluirPagamento(id){
+  if(!usuarioAtual || !PERMISSOES[usuarioAtual.nivel].financeiroEditarExcluir){
+    mostrarToast('Apenas o usuário Master pode excluir pagamentos já efetuados.');
+    return;
+  }
+  try{
+    await db.collection('financeiro').doc(id).delete();
+    mostrarToast('Pagamento excluído pelo Master.');
+  } catch(erro){
+    console.error('Erro ao excluir pagamento:', erro);
+    mostrarToast('Erro ao excluir no banco de dados.');
+  }
+}
+
+function renderizarFinanceiro(){
+  const tabela = document.getElementById('tabela-financeiro');
+  const financeiroCompleto = usuarioAtual ? PERMISSOES[usuarioAtual.nivel].financeiroCompleto : true;
+  const podeEditarExcluirPago = usuarioAtual ? PERMISSOES[usuarioAtual.nivel].financeiroEditarExcluir : false;
+
+  // Recepcionista/Comercial/Secretária só veem receitas (recebimentos), nunca despesas/contas a pagar
+  const linhasVisiveis = financeiroCompleto ? financeiro : financeiro.filter(f => f.tipo === 'receita');
+
+  if(linhasVisiveis.length === 0){ tabela.innerHTML = '<tr><td colspan="8">Nenhuma transação registrada.</td></tr>'; return; }
+
+  const badgeStatus = { pago:'badge-verde', parcial:'badge-amarelo', pendente:'badge-cinza' };
+
+  tabela.innerHTML = linhasVisiveis.map((f) => {
+    const restante = Math.max(f.valor - (f.valorRecebido || 0), 0);
+    const responsaveis = (f.recebimentos && f.recebimentos.length > 0)
+      ? [...new Set(f.recebimentos.map(r => r.recebidoPor))].join(', ')
+      : '-';
+    const houvePagamento = (f.valorRecebido || 0) > 0; // "pagamento efetuado" — só o Master mexe nisso
+    return `<tr>
+      <td>${f.dataVencimento}</td>
+      <td>${f.categoria}</td>
+      <td class="col-financeiro-completo">${f.tipo}</td>
+      <td>
+        ${formatarMoeda(f.valor)}
+        ${f.status === 'parcial' ? `<div style="font-size:11px; color:var(--text-1);">recebido ${formatarMoeda(f.valorRecebido)} · falta ${formatarMoeda(restante)}</div>` : ''}
+      </td>
+      <td><span class="badge ${badgeStatus[f.status] || 'badge-cinza'}">${f.status}</span></td>
+      <td>${responsaveis}</td>
+      <td class="col-financeiro-receber">
+        ${f.status !== 'pago' && f.tipo === 'receita' ? `<button class="btn-secundario" onclick="abrirModalReceberPagamento('${f.id}')">Receber Pagamento</button>` : ''}
+      </td>
+      <td>
+        ${houvePagamento && podeEditarExcluirPago ? `
+          <button class="btn-secundario" onclick="abrirModalEditarPagamento('${f.id}')">Editar</button>
+          <button class="btn-secundario" onclick="excluirPagamento('${f.id}')">Excluir</button>
+        ` : (houvePagamento ? '<span style="color:var(--text-1); font-size:11px;">🔒 só Master</span>' : '')}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+/* ===== recebimento de pagamento (com possibilidade de recebimento parcial) ===== */
+let indiceFinanceiroEmRecebimento = null;
+let pacienteProntuarioAtualId = null;
+let reabrirProntuarioAposRecebimentoId = null;
+
+function cancelarModalReceberPagamento(){
+  fecharModal('modal-receber-pagamento');
+  if(reabrirProntuarioAposRecebimentoId){
+    const pacienteId = reabrirProntuarioAposRecebimentoId;
+    reabrirProntuarioAposRecebimentoId = null;
+    abrirProntuarioPaciente(pacienteId);
+    alternarAbaProntuario('financeiro');
+  }
+}
+
+function abrirModalReceberPagamento(id){
+  indiceFinanceiroEmRecebimento = id;
+  const f = financeiro.find(x => x.id === id);
+  const restante = Math.max(f.valor - (f.valorRecebido || 0), 0);
+
+  document.getElementById('receber-descricao').innerText = f.categoria;
+  document.getElementById('receber-valor-total-label').innerText = formatarMoeda(f.valor);
+  document.getElementById('receber-valor-recebido-label').innerText = formatarMoeda(f.valorRecebido || 0);
+  document.getElementById('receber-valor-restante-label').innerText = formatarMoeda(restante);
+  document.getElementById('receber-valor-input').value = restante;
+  document.getElementById('receber-valor-input').max = restante;
+  document.getElementById('receber-forma-pagamento').value = 'pix';
+  document.getElementById('receber-aviso-parcial').style.display = 'none';
+
+  // Nome do usuário responsável é preenchido automaticamente e obrigatório — não editável
+  document.getElementById('receber-usuario-responsavel').value = usuarioAtual ? usuarioAtual.nome : '—';
+
+  abrirModal('modal-receber-pagamento');
+}
+
+function validarValorRecebimento(){
+  const id = indiceFinanceiroEmRecebimento;
+  if(id === null) return;
+  const f = financeiro.find(x => x.id === id);
+  if(!f) return;
+  const restante = Math.max(f.valor - (f.valorRecebido || 0), 0);
+  const valorDigitado = parseFloat(document.getElementById('receber-valor-input').value) || 0;
+
+  document.getElementById('receber-aviso-parcial').style.display = (valorDigitado > 0 && valorDigitado < restante) ? 'block' : 'none';
+}
+
+async function confirmarRecebimento(){
+  const id = indiceFinanceiroEmRecebimento;
+  if(id === null) return;
+
+  const f = financeiro.find(x => x.id === id);
+  if(!f) return;
+
+  const restante = Math.max(f.valor - (f.valorRecebido || 0), 0);
+  const valorRecebidoAgora = parseFloat(document.getElementById('receber-valor-input').value) || 0;
+  const formaPagamento = document.getElementById('receber-forma-pagamento').value;
+
+  if(valorRecebidoAgora <= 0){
+    mostrarToast('Informe um valor recebido maior que zero.');
+    return;
+  }
+  if(valorRecebidoAgora > restante){
+    mostrarToast('O valor recebido não pode ser maior que o restante devido.');
+    return;
+  }
+  if(!usuarioAtual){
+    mostrarToast('Não foi possível identificar o usuário responsável pelo recebimento.');
+    return;
+  }
+
+  const novoValorRecebido = (f.valorRecebido || 0) + valorRecebidoAgora;
+  const novoStatus = novoValorRecebido >= f.valor ? 'pago' : 'parcial';
+  const novoRecebimento = {
+    data: new Date().toLocaleDateString('pt-BR'),
+    valor: valorRecebidoAgora,
+    formaPagamento,
+    recebidoPor: usuarioAtual.nome // obrigatório — registrado automaticamente, sem edição manual
+  };
+
+  try{
+    await db.collection('financeiro').doc(id).update({
+      valorRecebido: novoValorRecebido,
+      status: novoStatus,
+      recebimentos: firebase.firestore.FieldValue.arrayUnion(novoRecebimento)
+    });
+
+    mostrarToast(novoStatus === 'pago' ? 'Pagamento recebido integralmente.' : 'Pagamento parcial registrado com sucesso.');
+    fecharModal('modal-receber-pagamento');
+
+    // se o recebimento foi disparado a partir do prontuário do paciente, reabre o prontuário na aba financeiro
+    if(reabrirProntuarioAposRecebimentoId){
+      const pacienteId = reabrirProntuarioAposRecebimentoId;
+      reabrirProntuarioAposRecebimentoId = null;
+      abrirProntuarioPaciente(pacienteId);
+      alternarAbaProntuario('financeiro');
+    }
+  } catch(erro){
+    console.error('Erro ao confirmar recebimento:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+/* =========================================================
+   CONFIGURAÇÕES — placeholder no editor
+========================================================= */
+/* =========================================================
+   CONFIGURAÇÕES — dados da clínica e modelo de contrato (Firestore)
+========================================================= */
+async function carregarConfiguracoesClinica(){
+  try{
+    const doc = await db.collection('clinica').doc('dados').get();
+    if(doc.exists){
+      const c = doc.data();
+      document.getElementById('cfg-nome').value = c.nome || '';
+      document.getElementById('cfg-cnpj').value = c.cnpj || '';
+      document.getElementById('cfg-telefone').value = c.telefone || '';
+      document.getElementById('cfg-email').value = c.email || '';
+      document.getElementById('cfg-endereco').value = c.endereco || '';
+    }
+  } catch(erro){
+    console.error('Erro ao carregar dados da clínica:', erro);
+  }
+}
+
+async function salvarDadosClinica(){
+  try{
+    await db.collection('clinica').doc('dados').set({
+      nome: document.getElementById('cfg-nome').value,
+      cnpj: document.getElementById('cfg-cnpj').value,
+      telefone: document.getElementById('cfg-telefone').value,
+      email: document.getElementById('cfg-email').value,
+      endereco: document.getElementById('cfg-endereco').value
+    }, { merge:true });
+    mostrarToast('Dados da clínica salvos.');
+  } catch(erro){
+    console.error('Erro ao salvar dados da clínica:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+async function carregarTemplateContrato(){
+  try{
+    const doc = await db.collection('contratoTemplate').doc('ativo').get();
+    if(doc.exists){
+      document.getElementById('editor-template').innerHTML = doc.data().conteudoHtml || '';
+    }
+  } catch(erro){
+    console.error('Erro ao carregar modelo de contrato:', erro);
+  }
+}
+
+async function salvarTemplateContrato(){
+  try{
+    await db.collection('contratoTemplate').doc('ativo').set({
+      conteudoHtml: document.getElementById('editor-template').innerHTML
+    });
+    mostrarToast('Modelo de contrato salvo.');
+  } catch(erro){
+    console.error('Erro ao salvar modelo de contrato:', erro);
+    mostrarToast('Erro ao salvar no banco de dados.');
+  }
+}
+
+function inserirPlaceholder(texto){
+  const editor = document.getElementById('editor-template');
+  editor.focus();
+  document.execCommand('insertText', false, texto);
+}
+
+/* =========================================================
+   INICIALIZAÇÃO — roda assim que a página carrega, antes do login,
+   para os dados já estarem disponíveis (ou o banco populado) quando
+   o usuário digitar as credenciais.
+========================================================= */
+(async function iniciarAplicacao(){
+  const aviso = document.getElementById('aviso-status-conexao');
+  try{
+    await semearBancoDeDadosSeNecessario();
+    carregarColecoes();
+    aviso.innerText = '🟢 Conectado ao banco de dados em tempo real.';
+    setTimeout(() => { aviso.style.display = 'none'; }, 3000);
+  } catch(erro){
+    console.error('Erro ao conectar ao Firebase:', erro);
+    aviso.innerText = '🔴 Não foi possível conectar ao banco de dados. Verifique a configuração do Firebase (firebaseConfig) e sua conexão com a internet.';
+    aviso.style.borderColor = 'var(--danger)';
+    aviso.style.color = 'var(--danger)';
+  }
+})();
+</script>
+</body>
+</html>
