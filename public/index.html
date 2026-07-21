@@ -7,6 +7,7 @@
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 <style>
@@ -273,13 +274,16 @@
 <div id="tela-login">
   <div class="card-login">
     <h1>Sistema de Gestão Odontológica</h1>
-    <p>Entre com seu usuário e senha</p>
-    <label>Usuário</label>
-    <input type="text" id="login-usuario-input" placeholder="usuário ou e-mail" onkeydown="if(event.key==='Enter') fazerLogin()">
+    <p>Entre com seu e-mail e senha</p>
+    <label>E-mail</label>
+    <input type="email" id="login-usuario-input" placeholder="seuemail@clinica.com" onkeydown="if(event.key==='Enter') fazerLogin()">
     <label>Senha</label>
     <input type="password" id="login-senha-input" placeholder="••••••••" onkeydown="if(event.key==='Enter') fazerLogin()">
     <button class="btn-primario btn-bloco" id="login-btn-entrar" onclick="fazerLogin()">Entrar</button>
     <div id="login-erro" style="color:var(--danger); font-size:12px; margin-top:10px;"></div>
+    <div style="margin-top:10px; text-align:center;">
+      <span onclick="esqueciSenha()" style="color:var(--accent); cursor:pointer; font-size:12px; text-decoration:underline;">Esqueci minha senha</span>
+    </div>
   </div>
 </div>
 
@@ -1022,6 +1026,14 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+const auth = firebase.auth();
+
+/* App secundário — usado SOMENTE para criar novos usuários (Authentication).
+   Sem isso, criar um usuário novo automaticamente logaria como ele e derrubaria
+   a sessão do admin/master que está cadastrando. É o truque padrão para apps
+   sem backend (Cloud Functions) que precisam de "admin cria usuário". */
+const appSecundario = firebase.initializeApp(firebaseConfig, 'Secundario');
+const authSecundario = appSecundario.auth();
 
 /* Arrays locais — funcionam como cache em memória, populados em tempo real
    pelos listeners onSnapshot de cada coleção (ver carregarColecoes()). Todas as
@@ -1163,12 +1175,35 @@ async function semearBancoDeDadosSeNecessario(){
 
   mostrarToast('Primeira execução — preparando dados iniciais...');
 
-  await db.collection('usuarios').doc('master').set({
-    login:'master', nome:'Master', email:'master@clinica.com', senha:'Estrela3342@', nivel:'master'
-  });
-  await db.collection('usuarios').add({ login:'ana@clinica.com', nome:'Dra. Ana Souza', email:'ana@clinica.com', senha:'123456', nivel:'administrador' });
-  await db.collection('usuarios').add({ login:'gabriel@clinica.com', nome:'Gabriel Pfau', email:'gabriel@clinica.com', senha:'123456', nivel:'profissional_saude' });
-  await db.collection('usuarios').add({ login:'carla@clinica.com', nome:'Carla Recepção', email:'carla@clinica.com', senha:'123456', nivel:'secretaria' });
+  // Master: cria pelo app PRINCIPAL — como ninguém está logado ainda, isso já serve
+  // como o primeiro login. Se o e-mail já existir no Authentication (ex: rodou o seed
+  // antes e falhou no meio), cai no catch e segue tentando os próximos usuários.
+  try{
+    const credencialMaster = await auth.createUserWithEmailAndPassword('master@clinica.com', 'Estrela3342@');
+    await db.collection('usuarios').doc(credencialMaster.user.uid).set({
+      nome:'Master', email:'master@clinica.com', nivel:'master'
+    });
+    await auth.signOut(); // volta pra tela de login normal, em vez de manter a sessão automática
+  } catch(erro){
+    console.warn('Master já existe no Authentication ou houve erro ao criar:', erro.code);
+  }
+
+  // Demais usuários: criados pelo app SECUNDÁRIO, pra não interferir em nenhuma sessão
+  const usuariosIniciais = [
+    { email:'ana@clinica.com', senha:'123456', nome:'Dra. Ana Souza', nivel:'administrador' },
+    { email:'gabriel@clinica.com', senha:'123456', nome:'Gabriel Pfau', nivel:'profissional_saude' },
+    { email:'carla@clinica.com', senha:'123456', nome:'Carla Recepção', nivel:'secretaria' }
+  ];
+
+  for(const u of usuariosIniciais){
+    try{
+      const credencial = await authSecundario.createUserWithEmailAndPassword(u.email, u.senha);
+      await db.collection('usuarios').doc(credencial.user.uid).set({ nome:u.nome, email:u.email, nivel:u.nivel });
+      await authSecundario.signOut();
+    } catch(erro){
+      console.warn(`Usuário ${u.email} já existe ou houve erro:`, erro.code);
+    }
+  }
 
   await db.collection('procedimentos').add({ nome:'Cárie / Restauração', categoria:'Dentística', valor:100 });
   await db.collection('procedimentos').add({ nome:'Limpeza', categoria:'Preventivo', valor:150 });
@@ -1198,15 +1233,15 @@ async function semearBancoDeDadosSeNecessario(){
 }
 
 /* =========================================================
-   LOGIN — autenticação por usuário e senha (consulta direta ao Firestore)
+   LOGIN — Firebase Authentication (e-mail/senha reais)
 ========================================================= */
 async function fazerLogin(){
-  const loginDigitado = document.getElementById('login-usuario-input').value.trim().toLowerCase();
+  const emailDigitado = document.getElementById('login-usuario-input').value.trim();
   const senhaDigitada = document.getElementById('login-senha-input').value;
   const botaoEntrar = document.getElementById('login-btn-entrar');
 
-  if(!loginDigitado || !senhaDigitada){
-    document.getElementById('login-erro').innerText = 'Informe usuário e senha.';
+  if(!emailDigitado || !senhaDigitada){
+    document.getElementById('login-erro').innerText = 'Informe e-mail e senha.';
     return;
   }
 
@@ -1214,21 +1249,20 @@ async function fazerLogin(){
   botaoEntrar.innerText = 'Entrando...';
 
   try{
-    // Busca por login OU e-mail — Firestore não faz OR nativo em campos diferentes,
-    // então consulta os dois campos separadamente.
-    const [porLogin, porEmail] = await Promise.all([
-      db.collection('usuarios').where('login', '==', loginDigitado).limit(1).get(),
-      db.collection('usuarios').where('email', '==', loginDigitado).limit(1).get()
-    ]);
-    const doc = !porLogin.empty ? porLogin.docs[0] : (!porEmail.empty ? porEmail.docs[0] : null);
-    const encontrado = doc ? { id: doc.id, ...doc.data() } : null;
+    const credencial = await auth.signInWithEmailAndPassword(emailDigitado, senhaDigitada);
+    const uid = credencial.user.uid;
 
-    if(!encontrado || encontrado.senha !== senhaDigitada){
-      document.getElementById('login-erro').innerText = 'Usuário ou senha inválidos.';
+    // Busca o perfil (nome/nível de acesso) vinculado a este UID
+    const doc = await db.collection('usuarios').doc(uid).get();
+
+    if(!doc.exists){
+      // Autenticado no Firebase, mas sem perfil no sistema — acesso foi revogado ou nunca configurado
+      await auth.signOut();
+      document.getElementById('login-erro').innerText = 'Seu acesso a este sistema foi revogado. Fale com o administrador.';
       return;
     }
 
-    usuarioAtual = encontrado;
+    usuarioAtual = { id: uid, uid, ...doc.data() };
     document.getElementById('login-erro').innerText = '';
     document.getElementById('login-usuario-input').value = '';
     document.getElementById('login-senha-input').value = '';
@@ -1243,14 +1277,39 @@ async function fazerLogin(){
     renderizarTudo();
   } catch(erro){
     console.error('Erro ao fazer login:', erro);
-    document.getElementById('login-erro').innerText = 'Erro de conexão com o banco de dados. Tente novamente.';
+    const mensagens = {
+      'auth/invalid-email': 'E-mail inválido.',
+      'auth/user-not-found': 'Usuário não encontrado.',
+      'auth/wrong-password': 'Senha incorreta.',
+      'auth/invalid-credential': 'E-mail ou senha inválidos.',
+      'auth/too-many-requests': 'Muitas tentativas. Aguarde alguns minutos e tente novamente.'
+    };
+    document.getElementById('login-erro').innerText = mensagens[erro.code] || 'Erro ao entrar. Tente novamente.';
   } finally {
     botaoEntrar.disabled = false;
     botaoEntrar.innerText = 'Entrar';
   }
 }
 
-function fazerLogout(){
+async function esqueciSenha(){
+  const email = document.getElementById('login-usuario-input').value.trim();
+  if(!email){
+    document.getElementById('login-erro').innerText = 'Digite seu e-mail no campo acima e clique em "Esqueci minha senha" de novo.';
+    return;
+  }
+  try{
+    await auth.sendPasswordResetEmail(email);
+    document.getElementById('login-erro').style.color = 'var(--accent)';
+    document.getElementById('login-erro').innerText = 'E-mail de redefinição enviado. Verifique sua caixa de entrada.';
+  } catch(erro){
+    console.error('Erro ao enviar redefinição de senha:', erro);
+    document.getElementById('login-erro').style.color = 'var(--danger)';
+    document.getElementById('login-erro').innerText = 'Não foi possível enviar o e-mail. Verifique se o endereço está correto.';
+  }
+}
+
+async function fazerLogout(){
+  await auth.signOut();
   usuarioAtual = null;
   document.getElementById('tela-login').style.display = 'flex';
   document.getElementById('app').style.display = 'none';
@@ -1316,30 +1375,45 @@ async function salvarUsuario(){
 
   try{
     if(usuarioEmEdicaoId){
+      // Edição: só nome e nível. E-mail e senha de OUTRO usuário não podem ser trocados
+      // pelo app sem backend — o Firebase só deixa o próprio usuário alterar essas
+      // credenciais. Use "Redefinir Senha" na lista para mandar um link por e-mail.
       const alvo = usuarios.find(u => u.id === usuarioEmEdicaoId);
       if(!podeGerenciarUsuario(alvo)){
         mostrarToast('Você não tem permissão para editar este usuário.');
         return;
       }
-      const dadosAtualizados = { nome, email, login: email, nivel };
-      if(senha) dadosAtualizados.senha = senha; // senha em branco = mantém a senha atual
-
-      await db.collection('usuarios').doc(usuarioEmEdicaoId).update(dadosAtualizados);
+      await db.collection('usuarios').doc(usuarioEmEdicaoId).update({ nome, nivel });
       mostrarToast('Usuário atualizado com sucesso.');
       usuarioEmEdicaoId = null;
       document.getElementById('usr-btn-salvar').innerText = '+ Adicionar Usuário';
+      document.getElementById('usr-email').disabled = false;
     } else {
-      if(!senha){ mostrarToast('Informe uma senha para o novo usuário.'); return; }
-      await db.collection('usuarios').add({ login: email, nome, email, senha, nivel });
+      // Criação: cria a conta no Authentication pelo app SECUNDÁRIO, pra não deslogar
+      // quem está cadastrando, e grava o perfil (nome/nível) no Firestore com o mesmo UID.
+      if(!senha || senha.length < 6){ mostrarToast('A senha precisa ter ao menos 6 caracteres.'); return; }
+
+      const credencial = await authSecundario.createUserWithEmailAndPassword(email, senha);
+      await db.collection('usuarios').doc(credencial.user.uid).set({ nome, email, nivel });
+      await authSecundario.signOut();
+
       mostrarToast('Usuário cadastrado com sucesso.');
     }
 
     document.getElementById('usr-nome').value = '';
     document.getElementById('usr-email').value = '';
+    document.getElementById('usr-email').disabled = false;
     document.getElementById('usr-senha').value = '';
+    document.getElementById('usr-senha').disabled = false;
+    document.getElementById('usr-senha').placeholder = '••••••••';
   } catch(erro){
     console.error('Erro ao salvar usuário:', erro);
-    mostrarToast('Erro ao salvar no banco de dados. Tente novamente.');
+    const mensagens = {
+      'auth/email-already-in-use': 'Já existe um usuário cadastrado com esse e-mail.',
+      'auth/invalid-email': 'E-mail inválido.',
+      'auth/weak-password': 'Senha muito fraca — use ao menos 6 caracteres.'
+    };
+    mostrarToast(mensagens[erro.code] || 'Erro ao salvar no banco de dados. Tente novamente.');
   }
 }
 
@@ -1352,8 +1426,10 @@ function editarUsuario(id){
   usuarioEmEdicaoId = id;
   document.getElementById('usr-nome').value = alvo.nome;
   document.getElementById('usr-email').value = alvo.email;
+  document.getElementById('usr-email').disabled = true; // e-mail não pode mudar por aqui (limitação do Firebase Auth sem backend)
   document.getElementById('usr-senha').value = '';
-  document.getElementById('usr-senha').placeholder = 'deixe em branco para manter a senha atual';
+  document.getElementById('usr-senha').placeholder = 'use "Redefinir Senha" na lista';
+  document.getElementById('usr-senha').disabled = true;
   document.getElementById('usr-nivel').value = alvo.nivel;
   document.getElementById('usr-btn-salvar').innerText = 'Salvar Alterações';
 }
@@ -1368,10 +1444,21 @@ function renderizarUsuarios(){
       <td><span class="badge badge-cinza">${NOMES_NIVEL[u.nivel]}</span></td>
       <td>${podeGerenciar ? `
         <button class="btn-secundario" onclick="editarUsuario('${u.id}')">Editar</button>
+        <button class="btn-secundario" onclick="enviarRedefinicaoSenha('${u.email}')">Redefinir Senha</button>
         <button class="btn-secundario" onclick="removerUsuario('${u.id}')">Remover</button>
       ` : '<span style="color:var(--text-1); font-size:11px;">protegido</span>'}</td>
     </tr>`;
   }).join('');
+}
+
+async function enviarRedefinicaoSenha(email){
+  try{
+    await auth.sendPasswordResetEmail(email);
+    mostrarToast(`E-mail de redefinição de senha enviado para ${email}.`);
+  } catch(erro){
+    console.error('Erro ao enviar redefinição de senha:', erro);
+    mostrarToast('Erro ao enviar o e-mail de redefinição.');
+  }
 }
 
 async function removerUsuario(id){
@@ -1385,8 +1472,11 @@ async function removerUsuario(id){
   if(usuarios.length <= 1){ mostrarToast('É necessário manter ao menos um usuário cadastrado.'); return; }
 
   try{
+    // Remove apenas o PERFIL no Firestore — a conta no Authentication continua existindo
+    // (excluir a conta de outra pessoa exige backend/Admin SDK), mas sem o perfil o login
+    // é bloqueado automaticamente (ver fazerLogin: usuário autenticado sem perfil = acesso negado).
     await db.collection('usuarios').doc(id).delete();
-    mostrarToast('Usuário removido.');
+    mostrarToast('Acesso do usuário revogado com sucesso.');
   } catch(erro){
     console.error('Erro ao remover usuário:', erro);
     mostrarToast('Erro ao remover no banco de dados.');
